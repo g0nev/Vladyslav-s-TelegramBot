@@ -22,6 +22,7 @@ def test_bot_commands_cover_all_commands():
         "setmutemsg",
         "setkickmsg",
         "resetmsgs",
+        "ask",
     }
 
 
