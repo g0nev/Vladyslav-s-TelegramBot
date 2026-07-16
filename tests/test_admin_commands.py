@@ -150,10 +150,22 @@ async def test_addmsg_and_listmsgs(repo):
     message = make_message(user_id=1)
 
     await commands.cmd_addmsg(message, cmd("Привет всем!"), bot, repo)
-    await commands.cmd_listmsgs(message, repo)
+    await commands.cmd_listmsgs(message, bot, repo)
 
     stored = await repo.list_broadcast_messages(1)
     assert stored[0][1] == "Привет всем!"
+
+
+async def test_listmsgs_requires_admin(repo):
+    bot = await make_bot(is_admin_user_id=999)
+    await repo.add_broadcast_message(1, "Секретное сообщение")
+    message = make_message(user_id=1)
+
+    await commands.cmd_listmsgs(message, bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Эта команда доступна только администраторам чата."
+    )
 
 
 async def test_delmsg_removes_message(repo):

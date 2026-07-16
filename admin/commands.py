@@ -140,7 +140,9 @@ async def cmd_delmsg(
 
 
 @router.message(Command("listmsgs"))
-async def cmd_listmsgs(message: Message, repository: Repository) -> None:
+async def cmd_listmsgs(message: Message, bot: Bot, repository: Repository) -> None:
+    if not await _require_admin(message, bot):
+        return
     messages = await repository.list_broadcast_messages(message.chat.id)
     if not messages:
         await message.answer("Пул сообщений рассылки пуст.")
