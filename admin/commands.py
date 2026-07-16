@@ -3,9 +3,11 @@ from __future__ import annotations
 from aiogram import Bot, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from admin.permissions import is_admin
 from db.repository import Repository
+from scheduler.broadcaster import schedule_chat_broadcast
 
 router = Router(name="admin")
 
@@ -97,7 +99,11 @@ async def cmd_setresetdays(
 
 @router.message(Command("setinterval"))
 async def cmd_setinterval(
-    message: Message, command: CommandObject, bot: Bot, repository: Repository
+    message: Message,
+    command: CommandObject,
+    bot: Bot,
+    repository: Repository,
+    scheduler: AsyncIOScheduler,
 ) -> None:
     if not await _require_admin(message, bot):
         return
@@ -106,6 +112,7 @@ async def cmd_setinterval(
         return
     minutes = int(command.args.strip())
     await repository.set_broadcast_interval(message.chat.id, minutes)
+    schedule_chat_broadcast(scheduler, bot, repository, message.chat.id, minutes)
     await message.answer(f"Интервал рассылки установлен: {minutes} мин. (0 = выключено).")
 
 

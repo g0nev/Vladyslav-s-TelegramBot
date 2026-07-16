@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from aiogram.filters import CommandObject
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from admin import commands
 from db.repository import Repository
@@ -13,6 +14,14 @@ async def repo(tmp_path):
     repository = await Repository.create(str(tmp_path / "test.db"))
     yield repository
     await repository.close()
+
+
+@pytest.fixture
+def scheduler():
+    sched = AsyncIOScheduler()
+    yield sched
+    if sched.running:
+        sched.shutdown(wait=False)
 
 
 def make_message(user_id=1, chat_id=1, reply_to=None):
@@ -143,6 +152,17 @@ async def test_setresetdays_updates_value(repo):
 
     _, reset_days = await repo.get_chat_settings(1)
     assert reset_days == 7
+
+
+async def test_setinterval_updates_value(repo, scheduler):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setinterval(message, cmd("15"), bot, repo, scheduler)
+
+    interval, _ = await repo.get_chat_settings(1)
+    assert interval == 15
+    assert scheduler.get_job("broadcast_1") is not None
 
 
 async def test_addmsg_and_listmsgs(repo):
