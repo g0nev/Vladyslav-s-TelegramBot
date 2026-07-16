@@ -8,7 +8,12 @@ from aiogram.types import ChatPermissions, Message
 
 from admin.permissions import is_admin
 from db.repository import Repository
-from moderation.logic import compute_violation, contains_trigger_word, merge_trigger_words
+from moderation.logic import (
+    compute_violation,
+    contains_trigger_word,
+    format_punishment_message,
+    merge_trigger_words,
+)
 
 router = Router(name="moderation")
 
@@ -97,7 +102,14 @@ async def handle_moderated_message(
         message.chat.id, message.from_user.id, new_count, now.isoformat()
     )
 
-    text = WARN_TEMPLATES[punishment].format(mention=_mention(message), minutes=MUTE_MINUTES)
+    warn_message, mute_message, kick_message = await repository.get_message_templates(
+        message.chat.id
+    )
+    custom_template = {"warn": warn_message, "mute": mute_message, "kick": kick_message}[
+        punishment
+    ]
+    template = custom_template if custom_template else WARN_TEMPLATES[punishment]
+    text = format_punishment_message(template, mention=_mention(message), minutes=MUTE_MINUTES)
     await message.answer(text)
 
 

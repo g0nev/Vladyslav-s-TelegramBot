@@ -25,6 +25,18 @@ def contains_trigger_word(text: str, trigger_words: list[str]) -> bool:
     return any(word in lowered for word in trigger_words)
 
 
+class _SafeFormatDict(dict):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def format_punishment_message(template: str, **kwargs: object) -> str:
+    try:
+        return template.format_map(_SafeFormatDict(**kwargs))
+    except (ValueError, IndexError):
+        return template
+
+
 def compute_violation(
     current_count: int,
     last_violation_at: Optional[datetime],

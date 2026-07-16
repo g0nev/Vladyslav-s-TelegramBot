@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from typing import Optional
 
 import aiosqlite
 
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "models.sql")
+
+_MIGRATION_COLUMNS = ("warn_message", "mute_message", "kick_message")
 
 
 class Repository:
@@ -20,6 +23,11 @@ class Repository:
         conn = await aiosqlite.connect(db_path)
         with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
             await conn.executescript(f.read())
+        for column in _MIGRATION_COLUMNS:
+            try:
+                await conn.execute(f"ALTER TABLE chat_settings ADD COLUMN {column} TEXT")
+            except sqlite3.OperationalError:
+                pass
         await conn.commit()
         return cls(conn)
 
@@ -51,6 +59,47 @@ class Repository:
         await self._conn.execute(
             "UPDATE chat_settings SET reset_days = ? WHERE chat_id = ?",
             (days, chat_id),
+        )
+        await self._conn.commit()
+
+    async def get_message_templates(
+        self, chat_id: int
+    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
+        await self.get_chat_settings(chat_id)
+        cursor = await self._conn.execute(
+            "SELECT warn_message, mute_message, kick_message FROM chat_settings WHERE chat_id = ?",
+            (chat_id,),
+        )
+        row = await cursor.fetchone()
+        return (row[0], row[1], row[2])
+
+    async def set_warn_message(self, chat_id: int, text: Optional[str]) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET warn_message = ? WHERE chat_id = ?", (text, chat_id)
+        )
+        await self._conn.commit()
+
+    async def set_mute_message(self, chat_id: int, text: Optional[str]) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET mute_message = ? WHERE chat_id = ?", (text, chat_id)
+        )
+        await self._conn.commit()
+
+    async def set_kick_message(self, chat_id: int, text: Optional[str]) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET kick_message = ? WHERE chat_id = ?", (text, chat_id)
+        )
+        await self._conn.commit()
+
+    async def reset_message_templates(self, chat_id: int) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET warn_message = NULL, mute_message = NULL, "
+            "kick_message = NULL WHERE chat_id = ?",
+            (chat_id,),
         )
         await self._conn.commit()
 

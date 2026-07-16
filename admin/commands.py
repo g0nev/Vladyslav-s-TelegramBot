@@ -156,3 +156,57 @@ async def cmd_listmsgs(message: Message, bot: Bot, repository: Repository) -> No
         return
     lines = [f"{msg_id}: {text}" for msg_id, text in messages]
     await message.answer("Сообщения рассылки:\n" + "\n".join(lines))
+
+
+_SETMSG_USAGE = (
+    "Использование: {command} <текст>\n"
+    "Доступные плейсхолдеры: {{mention}} — упоминание пользователя, "
+    "{{minutes}} — длительность мьюта в минутах."
+)
+
+
+@router.message(Command("setwarnmsg"))
+async def cmd_setwarnmsg(
+    message: Message, command: CommandObject, bot: Bot, repository: Repository
+) -> None:
+    if not await _require_admin(message, bot):
+        return
+    if not command.args or not command.args.strip():
+        await message.answer(_SETMSG_USAGE.format(command="/setwarnmsg"))
+        return
+    await repository.set_warn_message(message.chat.id, command.args)
+    await message.answer("Текст предупреждения (1-е нарушение) обновлён.")
+
+
+@router.message(Command("setmutemsg"))
+async def cmd_setmutemsg(
+    message: Message, command: CommandObject, bot: Bot, repository: Repository
+) -> None:
+    if not await _require_admin(message, bot):
+        return
+    if not command.args or not command.args.strip():
+        await message.answer(_SETMSG_USAGE.format(command="/setmutemsg"))
+        return
+    await repository.set_mute_message(message.chat.id, command.args)
+    await message.answer("Текст мьюта (2-е нарушение) обновлён.")
+
+
+@router.message(Command("setkickmsg"))
+async def cmd_setkickmsg(
+    message: Message, command: CommandObject, bot: Bot, repository: Repository
+) -> None:
+    if not await _require_admin(message, bot):
+        return
+    if not command.args or not command.args.strip():
+        await message.answer(_SETMSG_USAGE.format(command="/setkickmsg"))
+        return
+    await repository.set_kick_message(message.chat.id, command.args)
+    await message.answer("Текст кика (3-е нарушение) обновлён.")
+
+
+@router.message(Command("resetmsgs"))
+async def cmd_resetmsgs(message: Message, bot: Bot, repository: Repository) -> None:
+    if not await _require_admin(message, bot):
+        return
+    await repository.reset_message_templates(message.chat.id)
+    await message.answer("Тексты наказаний сброшены к значениям по умолчанию.")

@@ -15,7 +15,10 @@ CREATE TABLE IF NOT EXISTS warnings (
 CREATE TABLE IF NOT EXISTS chat_settings (
     chat_id INTEGER PRIMARY KEY,
     broadcast_interval_min INTEGER NOT NULL DEFAULT 0,
-    reset_days INTEGER NOT NULL DEFAULT 30
+    reset_days INTEGER NOT NULL DEFAULT 30,
+    warn_message TEXT,
+    mute_message TEXT,
+    kick_message TEXT
 );
 
 CREATE TABLE IF NOT EXISTS broadcast_messages (

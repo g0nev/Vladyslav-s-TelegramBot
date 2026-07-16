@@ -196,3 +196,79 @@ async def test_delmsg_removes_message(repo):
     await commands.cmd_delmsg(message, cmd(str(msg_id)), bot, repo)
 
     assert await repo.list_broadcast_messages(1) == []
+
+
+async def test_setwarnmsg_requires_admin(repo):
+    bot = await make_bot(is_admin_user_id=999)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setwarnmsg(message, cmd("Текст"), bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Эта команда доступна только администраторам чата."
+    )
+    assert (await repo.get_message_templates(1))[0] is None
+
+
+async def test_setwarnmsg_sets_template(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setwarnmsg(message, cmd("Осторожно, {mention}!"), bot, repo)
+
+    templates = await repo.get_message_templates(1)
+    assert templates[0] == "Осторожно, {mention}!"
+
+
+async def test_setwarnmsg_without_args_shows_usage(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setwarnmsg(message, cmd(None), bot, repo)
+
+    assert "Использование: /setwarnmsg" in message.answer.await_args.args[0]
+
+
+async def test_setmutemsg_sets_template(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmutemsg(message, cmd("{mention} молчит {minutes} мин."), bot, repo)
+
+    templates = await repo.get_message_templates(1)
+    assert templates[1] == "{mention} молчит {minutes} мин."
+
+
+async def test_setkickmsg_sets_template(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setkickmsg(message, cmd("Пока, {mention}."), bot, repo)
+
+    templates = await repo.get_message_templates(1)
+    assert templates[2] == "Пока, {mention}."
+
+
+async def test_resetmsgs_requires_admin(repo):
+    bot = await make_bot(is_admin_user_id=999)
+    await repo.set_warn_message(1, "кастом")
+    message = make_message(user_id=1)
+
+    await commands.cmd_resetmsgs(message, bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Эта команда доступна только администраторам чата."
+    )
+    assert (await repo.get_message_templates(1))[0] == "кастом"
+
+
+async def test_resetmsgs_clears_all_templates(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    await repo.set_warn_message(1, "кастом")
+    await repo.set_mute_message(1, "кастом")
+    await repo.set_kick_message(1, "кастом")
+    message = make_message(user_id=1)
+
+    await commands.cmd_resetmsgs(message, bot, repo)
+
+    assert await repo.get_message_templates(1) == (None, None, None)

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from moderation.logic import (
     compute_violation,
     contains_trigger_word,
+    format_punishment_message,
     merge_trigger_words,
 )
 
@@ -55,3 +56,18 @@ def test_compute_violation_never_resets_when_reset_days_zero():
     now = datetime(2026, 1, 1)
     count, punishment = compute_violation(1, old_violation, reset_days=0, now=now)
     assert (count, punishment) == (2, "mute")
+
+
+def test_format_punishment_message_substitutes_known_placeholders():
+    result = format_punishment_message("{mention}, тихо {minutes} минут.", mention="User", minutes=5)
+    assert result == "User, тихо 5 минут."
+
+
+def test_format_punishment_message_leaves_unknown_placeholder_literal():
+    result = format_punishment_message("Привет, {nickname}!", mention="User", minutes=5)
+    assert result == "Привет, {nickname}!"
+
+
+def test_format_punishment_message_falls_back_on_malformed_template():
+    result = format_punishment_message("Сломанная { скобка", mention="User", minutes=5)
+    assert result == "Сломанная { скобка"

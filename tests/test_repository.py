@@ -71,3 +71,46 @@ async def test_list_active_broadcast_chats(repo):
     await repo.set_broadcast_interval(chat_id=2, minutes=0)
     active = await repo.list_active_broadcast_chats()
     assert active == [(1, 30)]
+
+
+async def test_message_templates_default_to_none(repo):
+    templates = await repo.get_message_templates(chat_id=1)
+    assert templates == (None, None, None)
+
+
+async def test_message_templates_set_and_get(repo):
+    await repo.set_warn_message(chat_id=1, text="Осторожно, {mention}!")
+    await repo.set_mute_message(chat_id=1, text="{mention} молчит {minutes} минут.")
+    await repo.set_kick_message(chat_id=1, text="Пока, {mention}.")
+
+    templates = await repo.get_message_templates(chat_id=1)
+    assert templates == (
+        "Осторожно, {mention}!",
+        "{mention} молчит {minutes} минут.",
+        "Пока, {mention}.",
+    )
+
+
+async def test_reset_message_templates_clears_all(repo):
+    await repo.set_warn_message(chat_id=1, text="кастом")
+    await repo.set_mute_message(chat_id=1, text="кастом")
+    await repo.set_kick_message(chat_id=1, text="кастом")
+
+    await repo.reset_message_templates(chat_id=1)
+
+    assert await repo.get_message_templates(chat_id=1) == (None, None, None)
+
+
+async def test_migration_adds_columns_to_preexisting_db(tmp_path):
+    db_path = str(tmp_path / "legacy.db")
+
+    legacy_repo = await Repository.create(db_path)
+    await legacy_repo.set_broadcast_interval(chat_id=1, minutes=10)
+    await legacy_repo.close()
+
+    reopened_repo = await Repository.create(db_path)
+    templates = await reopened_repo.get_message_templates(chat_id=1)
+    assert templates == (None, None, None)
+    interval, _ = await reopened_repo.get_chat_settings(chat_id=1)
+    assert interval == 10
+    await reopened_repo.close()
