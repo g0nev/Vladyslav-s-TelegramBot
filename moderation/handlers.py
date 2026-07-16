@@ -70,9 +70,6 @@ async def handle_moderated_message(
     now = datetime.now(timezone.utc)
 
     new_count, punishment = compute_violation(count, last_violation_at, reset_days, now)
-    await repository.set_warning(
-        message.chat.id, message.from_user.id, new_count, now.isoformat()
-    )
 
     if punishment == "mute":
         try:
@@ -92,6 +89,13 @@ async def handle_moderated_message(
         except TelegramAPIError:
             await _notify_missing_permissions(message)
             return
+
+    # Only persist the new count once the enforcement action (if any) has
+    # actually succeeded, so a permission failure doesn't silently advance
+    # or reset the user's violation history.
+    await repository.set_warning(
+        message.chat.id, message.from_user.id, new_count, now.isoformat()
+    )
 
     text = WARN_TEMPLATES[punishment].format(mention=_mention(message), minutes=MUTE_MINUTES)
     await message.answer(text)

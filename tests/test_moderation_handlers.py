@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from aiogram.exceptions import TelegramAPIError
 
 from db.repository import Repository
 from moderation.handlers import handle_moderated_message
@@ -105,8 +106,6 @@ def clear_permission_notice_cache():
 async def test_missing_bot_permissions_notifies_once_and_throttles(repo):
     from datetime import datetime, timezone
 
-    from aiogram.exceptions import TelegramAPIError
-
     now_iso = datetime.now(timezone.utc).isoformat()
     await repo.set_warning(chat_id=1, user_id=100, count=1, last_violation_at=now_iso)
     await repo.set_warning(chat_id=1, user_id=200, count=1, last_violation_at=now_iso)
@@ -123,3 +122,42 @@ async def test_missing_bot_permissions_notifies_once_and_throttles(repo):
     assert message1.answer.await_count == 1
     assert "прав администратора" in message1.answer.await_args.args[0]
     assert message2.answer.await_count == 0
+
+
+async def test_missing_permissions_on_mute_does_not_bump_count(repo):
+    bot = await make_bot()
+    message = make_message("спам")
+
+    # First violation succeeds normally -> count becomes 1.
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+    count, _ = await repo.get_warning(chat_id=1, user_id=100)
+    assert count == 1
+
+    # Second violation would mute, but the bot lacks permissions.
+    bot.restrict_chat_member.side_effect = TelegramAPIError(
+        method=None, message="Not enough rights"
+    )
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    count, _ = await repo.get_warning(chat_id=1, user_id=100)
+    assert count == 1
+
+
+async def test_missing_permissions_on_kick_does_not_reset_count(repo):
+    bot = await make_bot()
+    message = make_message("спам")
+
+    # First two violations succeed normally -> count becomes 2 (mute applied).
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+    count, _ = await repo.get_warning(chat_id=1, user_id=100)
+    assert count == 2
+
+    # Third violation would kick, but the bot lacks permissions.
+    bot.ban_chat_member.side_effect = TelegramAPIError(
+        method=None, message="Not enough rights"
+    )
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    count, _ = await repo.get_warning(chat_id=1, user_id=100)
+    assert count == 2
