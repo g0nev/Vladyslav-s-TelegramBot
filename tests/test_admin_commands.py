@@ -1,0 +1,166 @@
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+from aiogram.filters import CommandObject
+
+from admin import commands
+from db.repository import Repository
+
+
+@pytest.fixture
+async def repo(tmp_path):
+    repository = await Repository.create(str(tmp_path / "test.db"))
+    yield repository
+    await repository.close()
+
+
+def make_message(user_id=1, chat_id=1, reply_to=None):
+    from_user = SimpleNamespace(id=user_id, mention_html=lambda: f"User{user_id}")
+    return SimpleNamespace(
+        chat=SimpleNamespace(id=chat_id),
+        from_user=from_user,
+        reply_to_message=reply_to,
+        answer=AsyncMock(),
+    )
+
+
+def make_reply_user(user_id):
+    from_user = SimpleNamespace(id=user_id, mention_html=lambda: f"User{user_id}")
+    return SimpleNamespace(from_user=from_user)
+
+
+async def make_bot(is_admin_user_id=1):
+    bot = AsyncMock()
+
+    async def get_chat_member(chat_id, user_id):
+        status = "administrator" if user_id == is_admin_user_id else "member"
+        return SimpleNamespace(status=status)
+
+    bot.get_chat_member.side_effect = get_chat_member
+    return bot
+
+
+def cmd(args):
+    return CommandObject(prefix="/", command="x", args=args)
+
+
+async def test_addword_requires_admin(repo):
+    bot = await make_bot(is_admin_user_id=999)
+    message = make_message(user_id=1)
+
+    await commands.cmd_addword(message, cmd("спам"), bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Эта команда доступна только администраторам чата."
+    )
+    assert await repo.list_trigger_words(1) == []
+
+
+async def test_addword_adds_word(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_addword(message, cmd("спам"), bot, repo)
+
+    assert await repo.list_trigger_words(1) == ["спам"]
+
+
+async def test_addword_without_args(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_addword(message, cmd(None), bot, repo)
+
+    message.answer.assert_awaited_once_with("Использование: /addword <слово>")
+
+
+async def test_addword_whitespace_only_args(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_addword(message, cmd("   "), bot, repo)
+
+    message.answer.assert_awaited_once_with("Использование: /addword <слово>")
+    assert await repo.list_trigger_words(1) == []
+
+
+async def test_delword_removes_existing(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    await repo.add_trigger_word(1, "спам")
+    message = make_message(user_id=1)
+
+    await commands.cmd_delword(message, cmd("спам"), bot, repo)
+
+    assert await repo.list_trigger_words(1) == []
+
+
+async def test_listwords_empty(repo):
+    message = make_message(user_id=1)
+
+    await commands.cmd_listwords(message, repo)
+
+    message.answer.assert_awaited_once_with("Дополнительных триггер-слов для этого чата нет.")
+
+
+async def test_warns_reports_count(repo):
+    await repo.set_warning(chat_id=1, user_id=42, count=2, last_violation_at="2026-07-15T00:00:00")
+    message = make_message(user_id=1, reply_to=make_reply_user(42))
+
+    await commands.cmd_warns(message, repo)
+
+    message.answer.assert_awaited_once()
+    assert "2" in message.answer.await_args.args[0]
+
+
+async def test_resetwarns_clears_count(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    await repo.set_warning(chat_id=1, user_id=42, count=2, last_violation_at="2026-07-15T00:00:00")
+    message = make_message(user_id=1, reply_to=make_reply_user(42))
+
+    await commands.cmd_resetwarns(message, bot, repo)
+
+    count, _ = await repo.get_warning(1, 42)
+    assert count == 0
+
+
+async def test_setresetdays_rejects_non_numeric(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setresetdays(message, cmd("много"), bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Использование: /setresetdays <число дней, 0 = никогда>"
+    )
+
+
+async def test_setresetdays_updates_value(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setresetdays(message, cmd("7"), bot, repo)
+
+    _, reset_days = await repo.get_chat_settings(1)
+    assert reset_days == 7
+
+
+async def test_addmsg_and_listmsgs(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_addmsg(message, cmd("Привет всем!"), bot, repo)
+    await commands.cmd_listmsgs(message, repo)
+
+    stored = await repo.list_broadcast_messages(1)
+    assert stored[0][1] == "Привет всем!"
+
+
+async def test_delmsg_removes_message(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+    msg_id = await repo.add_broadcast_message(1, "Текст")
+
+    await commands.cmd_delmsg(message, cmd(str(msg_id)), bot, repo)
+
+    assert await repo.list_broadcast_messages(1) == []
