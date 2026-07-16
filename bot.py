@@ -6,6 +6,7 @@ from aiogram.client.default import DefaultBotProperties
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import config
+from admin.bot_commands import register_commands
 from admin.commands import router as admin_router
 from db.repository import Repository
 from moderation.handlers import router as moderation_router
@@ -20,6 +21,7 @@ async def main() -> None:
     dp = Dispatcher()
     dp.include_router(admin_router)
     dp.include_router(moderation_router)
+    await register_commands(bot)
 
     repository = await Repository.create(config.DB_PATH)
     default_trigger_words = load_trigger_words_from_file(config.TRIGGER_WORDS_FILE)
