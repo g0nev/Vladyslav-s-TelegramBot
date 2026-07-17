@@ -176,7 +176,7 @@ async def test_non_admin_requesting_admin_tool_is_blocked(repo):
 
 async def test_immediate_admin_tool_executes(repo):
     message = make_message()
-    response = AIResponse(tool_name="add_trigger_word", tool_arguments={"word": "казино"})
+    response = AIResponse(tool_name="add_trigger_word", tool_arguments={"words": ["казино"]})
     with patch("ai.handlers.is_admin", AsyncMock(return_value=True)):
         with patch("ai.handlers.ask_ai_with_tools", AsyncMock(return_value=response)):
             await cmd_ask(message, cmd("добавь казино"), AsyncMock(), repo, MagicMock())

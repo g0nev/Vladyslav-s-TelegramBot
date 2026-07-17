@@ -88,21 +88,53 @@ async def test_list_broadcast_messages(repo):
 
 
 async def test_add_trigger_word(repo):
-    result = await execute_tool("add_trigger_word", {"word": "казино"}, **_ctx(repo))
+    result = await execute_tool("add_trigger_word", {"words": ["казино"]}, **_ctx(repo))
     assert "казино" in result
     assert await repo.list_trigger_words(1) == ["казино"]
 
 
 async def test_add_trigger_word_escapes_html_in_result(repo):
-    result = await execute_tool("add_trigger_word", {"word": "<script>"}, **_ctx(repo))
+    result = await execute_tool("add_trigger_word", {"words": ["<script>"]}, **_ctx(repo))
     assert "&lt;script&gt;" in result
     assert "<script>" not in result
     assert await repo.list_trigger_words(1) == ["<script>"]
 
 
 async def test_add_trigger_word_rejects_empty(repo):
-    result = await execute_tool("add_trigger_word", {"word": "   "}, **_ctx(repo))
-    assert result == "Нужно указать непустое слово."
+    result = await execute_tool("add_trigger_word", {"words": ["   "]}, **_ctx(repo))
+    assert result == "Нужно указать хотя бы одно непустое слово."
+    assert await repo.list_trigger_words(1) == []
+
+
+async def test_add_trigger_word_rejects_missing_words_key(repo):
+    result = await execute_tool("add_trigger_word", {}, **_ctx(repo))
+    assert result == "Нужно указать хотя бы одно непустое слово."
+    assert await repo.list_trigger_words(1) == []
+
+
+async def test_add_trigger_word_adds_several_words_in_one_call(repo):
+    result = await execute_tool(
+        "add_trigger_word", {"words": ["спам", "реклама", "казино"]}, **_ctx(repo)
+    )
+    assert await repo.list_trigger_words(1) == ["казино", "реклама", "спам"]
+    assert "спам" in result and "реклама" in result and "казино" in result
+
+
+async def test_add_trigger_word_rejects_placeholder_pattern(repo):
+    result = await execute_tool(
+        "add_trigger_word",
+        {"words": [f"матерное_слово_{i}" for i in range(1, 21)]},
+        **_ctx(repo),
+    )
+    assert "плейсхолд" in result.lower()
+    assert await repo.list_trigger_words(1) == []
+
+
+async def test_add_trigger_word_rejects_crammed_single_string(repo):
+    result = await execute_tool(
+        "add_trigger_word", {"words": ["спам, реклама, казино"]}, **_ctx(repo)
+    )
+    assert "отдельным элементом" in result
     assert await repo.list_trigger_words(1) == []
 
 

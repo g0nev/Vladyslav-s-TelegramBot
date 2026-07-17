@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import re
 from typing import Optional
 
 from aiogram import Bot
@@ -38,11 +39,19 @@ PUBLIC_TOOLS: list[dict] = [
 ADMIN_ONLY_TOOLS: list[dict] = [
     _tool(
         "add_trigger_word",
-        "Добавить слово в список триггеров модерации.",
+        "Добавить одно или несколько слов в список триггеров модерации. Каждое слово — "
+        "отдельный элемент массива words; указывай только настоящие слова, никаких "
+        "шаблонных плейсхолдеров вида «слово_1», «слово_2».",
         {
             "type": "object",
-            "properties": {"word": {"type": "string", "description": "Слово-триггер."}},
-            "required": ["word"],
+            "properties": {
+                "words": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Список реальных слов-триггеров, каждое отдельным элементом.",
+                }
+            },
+            "required": ["words"],
         },
     ),
     _tool(
@@ -188,6 +197,13 @@ TARGET_REQUIRED_TOOLS: set[str] = {
 CONFIRMATION_TOOLS: set[str] = {"mute_user", "kick_user"}
 
 
+_PLACEHOLDER_SUFFIX = re.compile(r"_\d+$")
+
+
+def _looks_like_placeholder(word: str) -> bool:
+    return bool(_PLACEHOLDER_SUFFIX.search(word))
+
+
 def _as_int(value: object, default: int = 0) -> int:
     try:
         return int(value)
@@ -225,11 +241,35 @@ async def execute_tool(
         return "Сообщения рассылки:\n" + "\n".join(lines)
 
     if tool_name == "add_trigger_word":
-        word = str(arguments.get("word", "")).strip()
-        if not word:
-            return "Нужно указать непустое слово."
-        await repository.add_trigger_word(chat_id, word)
-        return f"Слово «{html.escape(word)}» добавлено в список триггеров."
+        raw_words = arguments.get("words")
+        if not isinstance(raw_words, list):
+            raw_words = [raw_words] if raw_words is not None else []
+        words = [str(w).strip() for w in raw_words if str(w).strip()]
+        if not words:
+            return "Нужно указать хотя бы одно непустое слово."
+
+        crammed = [w for w in words if "," in w or "\n" in w]
+        if crammed:
+            return (
+                "Каждое слово нужно передавать отдельным элементом списка words, "
+                "без запятых и переносов строк внутри одного слова."
+            )
+
+        placeholders = [w for w in words if _looks_like_placeholder(w)]
+        if placeholders:
+            escaped_placeholders = ", ".join(f"«{html.escape(w)}»" for w in placeholders)
+            return (
+                "Это похоже на шаблонные плейсхолдеры, а не реальные слова: "
+                f"{escaped_placeholders}. Укажи настоящие слова-триггеры."
+            )
+
+        for word in words:
+            await repository.add_trigger_word(chat_id, word)
+
+        escaped_words = ", ".join(f"«{html.escape(w)}»" for w in words)
+        if len(words) == 1:
+            return f"Слово {escaped_words} добавлено в список триггеров."
+        return f"Слова {escaped_words} добавлены в список триггеров."
 
     if tool_name == "delete_trigger_word":
         word = str(arguments.get("word", "")).strip()

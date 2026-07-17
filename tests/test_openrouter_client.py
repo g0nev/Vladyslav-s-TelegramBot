@@ -8,6 +8,7 @@ from ai.openrouter_client import (
     META_TOOLS,
     READ_GENERAL_INFO,
     READ_TOOLS_REFERENCE,
+    SYSTEM_PROMPT,
     AIResponse,
     AIUnavailableError,
     ask_ai,
@@ -425,3 +426,17 @@ def test_build_tools_reference_lists_name_description_and_args():
 
 def test_build_tools_reference_empty_list():
     assert build_tools_reference([]) == "Нет доступных команд."
+
+
+def test_system_prompt_requires_answering_every_part_of_compound_question():
+    assert "несколько" in SYSTEM_PROMPT
+    assert "каждый" in SYSTEM_PROMPT or "каждую" in SYSTEM_PROMPT
+
+
+def test_system_prompt_requires_executing_available_tool_instead_of_describing_it():
+    assert "call_tool" in SYSTEM_PROMPT
+    assert "а не объясняй" in SYSTEM_PROMPT or "а не рассказывай" in SYSTEM_PROMPT
+
+
+def test_system_prompt_forbids_placeholder_words():
+    assert "плейсхолд" in SYSTEM_PROMPT.lower()
