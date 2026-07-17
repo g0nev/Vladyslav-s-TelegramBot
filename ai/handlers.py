@@ -95,7 +95,9 @@ async def cmd_ask(
     target_mention = reply.from_user.mention_html() if reply and reply.from_user else None
 
     try:
-        response = await ask_ai_with_tools(question, tools)
+        response = await ask_ai_with_tools(
+            question, tools, repository=repository, chat_id=message.chat.id
+        )
     except AIUnavailableError:
         await message.answer(UNAVAILABLE_MESSAGE)
         return

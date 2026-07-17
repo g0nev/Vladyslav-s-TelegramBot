@@ -7,12 +7,15 @@ from typing import Optional
 import aiohttp
 
 import config
+from db.repository import Repository
+from moderation.handlers import MUTE_MINUTES
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 MAX_TOOL_ROUNDS = 3
 
 READ_TOOLS_REFERENCE = "read_tools_reference"
+READ_GENERAL_INFO = "read_general_info"
 CALL_TOOL = "call_tool"
 
 META_TOOLS: list[dict] = [
@@ -25,6 +28,20 @@ META_TOOLS: list[dict] = [
                 "и т.п.) с описанием и нужными аргументами. Вызывай это, если пользователь "
                 "спрашивает про возможности/команды бота, или перед тем как вызвать "
                 "call_tool, чтобы узнать точное имя команды и её аргументы."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": READ_GENERAL_INFO,
+            "description": (
+                "Показать общую информацию: что за бот и чем занимается, кто разработчик, "
+                "как устроена логика модерации (эскалация наказаний), и текущие настройки "
+                "этого чата (автосброс предупреждений, интервал рассылки, тексты наказаний). "
+                "Вызывай это для вопросов о боте/разработчике/правилах модерации/настройках "
+                "чата — а не для вопросов о списке команд (для этого read_tools_reference)."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -53,16 +70,20 @@ META_TOOLS: list[dict] = [
 ]
 
 SYSTEM_PROMPT = (
-    "Ты — ассистент Telegram-бота модерации. У тебя есть два инструмента: "
+    "Ты — ассистент Telegram-бота модерации. У тебя есть три инструмента: "
     "read_tools_reference() — показывает список доступных команд бота с их аргументами; "
+    "read_general_info() — показывает общую информацию о боте, разработчике, логике "
+    "модерации и текущих настройках чата; "
     "call_tool(name, arguments) — выполняет конкретную команду бота. "
-    "Если вопрос не требует действий или списка команд — отвечай обычным текстом, не "
-    "вызывая инструменты. Если пользователь спрашивает, что ты умеешь или какие есть "
-    "команды, либо нужно выполнить модерационное действие (мьют, кик, триггер-слово и "
-    "т.п.) — сначала вызови read_tools_reference, затем, если нужно выполнить действие, "
-    "call_tool с точным именем команды из каталога. Ответ форматируется как Markdown: "
-    "имена инструментов и команд (например, mute_user) всегда оборачивай в обратные "
-    "кавычки (`mute_user`), иначе символы подчёркивания в имени сломают отображение."
+    "Если вопрос не требует действий, списка команд или общей информации — отвечай "
+    "обычным текстом, не вызывая инструменты. Если пользователь спрашивает, что ты "
+    "умеешь или какие есть команды — вызови read_tools_reference. Если спрашивает про "
+    "бота, разработчика, правила/логику модерации или настройки этого чата — вызови "
+    "read_general_info. Если нужно выполнить модерационное действие (мьют, кик, "
+    "триггер-слово и т.п.) — сначала read_tools_reference, затем call_tool с точным "
+    "именем команды из каталога. Ответ форматируется как Markdown: имена инструментов "
+    "и команд (например, mute_user) всегда оборачивай в обратные кавычки (`mute_user`), "
+    "иначе символы подчёркивания в имени сломают отображение."
 )
 
 
@@ -103,6 +124,29 @@ def build_tools_reference(tools: list[dict]) -> str:
     return "\n".join(lines)
 
 
+async def build_general_info(chat_id: int, repository: Repository) -> str:
+    broadcast_interval, reset_days = await repository.get_chat_settings(chat_id)
+    warn_message, mute_message, kick_message = await repository.get_message_templates(chat_id)
+
+    def _template(text: Optional[str]) -> str:
+        return text if text else "не задан (используется стандартный)"
+
+    return (
+        "О боте: это Telegram-бот модерации чата, который также отвечает на вопросы "
+        "через ИИ по команде /ask.\n"
+        "Разработчик: Владислав Звездаев. Если спросят конкретно, кто такой Владислав "
+        "(а не просто кто разработчик) — ему 22 года, он фронтенд-разработчик.\n"
+        "Логика модерации: 1-е нарушение — предупреждение; 2-е — мьют на "
+        f"{MUTE_MINUTES} мин.; 3-е и далее — кик из чата, счётчик сбрасывается.\n"
+        "Настройки этого чата:\n"
+        f"    • автосброс счётчика предупреждений: {reset_days} дн. (0 = никогда)\n"
+        f"    • интервал автоматической рассылки: {broadcast_interval} мин. (0 = выключено)\n"
+        f"    • текст предупреждения: {_template(warn_message)}\n"
+        f"    • текст мьюта: {_template(mute_message)}\n"
+        f"    • текст кика: {_template(kick_message)}"
+    )
+
+
 def _parse_arguments(raw_args: object) -> dict:
     try:
         arguments = json.loads(raw_args or "{}")
@@ -139,13 +183,17 @@ async def ask_ai(question: str) -> str:
         raise AIUnavailableError("Unexpected OpenRouter response shape") from exc
 
 
-async def ask_ai_with_tools(question: str, tools: list[dict]) -> AIResponse:
-    """Ask the model, exposing only two lightweight meta-tools by default.
+async def ask_ai_with_tools(
+    question: str, tools: list[dict], *, repository: Repository, chat_id: int
+) -> AIResponse:
+    """Ask the model, exposing only lightweight meta-tools by default.
 
     Full tool schemas are never sent to the model. If it needs the real
     catalog (to answer "what can you do" or to perform a moderation action),
     it calls read_tools_reference first and gets the catalog built from
     `tools` back as a tool result, then decides whether to call call_tool.
+    Questions about the bot/developer/moderation rules/chat settings are
+    answered the same way via read_general_info.
     """
     if not config.OPENROUTER_API_KEY:
         raise AIUnavailableError("OPENROUTER_API_KEY is not configured")
@@ -200,11 +248,12 @@ async def ask_ai_with_tools(question: str, tools: list[dict]) -> AIResponse:
                         tool_arguments=tool_arguments if isinstance(tool_arguments, dict) else {},
                     )
 
-                reference_text = (
-                    build_tools_reference(tools)
-                    if name == READ_TOOLS_REFERENCE
-                    else "Неизвестный инструмент."
-                )
+                if name == READ_TOOLS_REFERENCE:
+                    reference_text = build_tools_reference(tools)
+                elif name == READ_GENERAL_INFO:
+                    reference_text = await build_general_info(chat_id, repository)
+                else:
+                    reference_text = "Неизвестный инструмент."
 
                 messages.append(message)
                 messages.append(

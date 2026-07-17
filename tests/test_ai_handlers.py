@@ -86,7 +86,7 @@ async def test_non_admin_receives_only_public_tools(repo):
     message = make_message()
     captured = {}
 
-    async def fake(question, tools):
+    async def fake(question, tools, **kwargs):
         captured["tools"] = tools
         return AIResponse(text="ответ")
 
@@ -101,7 +101,7 @@ async def test_admin_receives_admin_tools(repo):
     message = make_message()
     captured = {}
 
-    async def fake(question, tools):
+    async def fake(question, tools, **kwargs):
         captured["tools"] = tools
         return AIResponse(text="ответ")
 

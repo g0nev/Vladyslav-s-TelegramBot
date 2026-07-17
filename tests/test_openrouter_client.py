@@ -6,13 +6,22 @@ import config
 from ai.openrouter_client import (
     CALL_TOOL,
     META_TOOLS,
+    READ_GENERAL_INFO,
     READ_TOOLS_REFERENCE,
     AIResponse,
     AIUnavailableError,
     ask_ai,
     ask_ai_with_tools,
+    build_general_info,
     build_tools_reference,
 )
+
+
+def _fake_repository(broadcast_interval=0, reset_days=0, templates=(None, None, None)):
+    repository = MagicMock()
+    repository.get_chat_settings = AsyncMock(return_value=(broadcast_interval, reset_days))
+    repository.get_message_templates = AsyncMock(return_value=templates)
+    return repository
 
 
 def _make_session_cm(response: AsyncMock):
@@ -87,7 +96,9 @@ async def test_ask_ai_with_tools_raises_when_key_missing(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
 
     with pytest.raises(AIUnavailableError):
-        await ask_ai_with_tools("Привет", tools=[])
+        await ask_ai_with_tools(
+            "Привет", tools=[], repository=_fake_repository(), chat_id=1
+        )
 
 
 async def test_ask_ai_with_tools_returns_text(monkeypatch):
@@ -103,7 +114,9 @@ async def test_ask_ai_with_tools_returns_text(monkeypatch):
         "ai.openrouter_client.aiohttp.ClientSession",
         return_value=_make_session_cm(response),
     ):
-        result = await ask_ai_with_tools("Привет", tools=[])
+        result = await ask_ai_with_tools(
+            "Привет", tools=[], repository=_fake_repository(), chat_id=1
+        )
 
     assert result.text == "Привет!"
     assert result.tool_name is None
@@ -152,7 +165,9 @@ async def test_ask_ai_with_tools_parses_call_tool(monkeypatch):
         "ai.openrouter_client.aiohttp.ClientSession",
         return_value=_make_session_cm(response),
     ):
-        result = await ask_ai_with_tools("добавь слово спам", tools=[])
+        result = await ask_ai_with_tools(
+            "добавь слово спам", tools=[], repository=_fake_repository(), chat_id=1
+        )
 
     assert result.tool_name == "add_trigger_word"
     assert result.tool_arguments == {"word": "спам"}
@@ -168,7 +183,9 @@ async def test_ask_ai_with_tools_handles_bad_arguments_json(monkeypatch):
         "ai.openrouter_client.aiohttp.ClientSession",
         return_value=_make_session_cm(response),
     ):
-        result = await ask_ai_with_tools("сбрось тексты", tools=[])
+        result = await ask_ai_with_tools(
+            "сбрось тексты", tools=[], repository=_fake_repository(), chat_id=1
+        )
 
     assert result.tool_name is None
     assert result.tool_arguments == {}
@@ -185,7 +202,9 @@ async def test_ask_ai_with_tools_raises_on_non_200(monkeypatch):
         return_value=_make_session_cm(response),
     ):
         with pytest.raises(AIUnavailableError):
-            await ask_ai_with_tools("Привет", tools=[])
+            await ask_ai_with_tools(
+                "Привет", tools=[], repository=_fake_repository(), chat_id=1
+            )
 
 
 async def test_ask_ai_with_tools_sends_only_meta_tools_in_payload(monkeypatch):
@@ -204,7 +223,9 @@ async def test_ask_ai_with_tools_sends_only_meta_tools_in_payload(monkeypatch):
 
     real_tools = [{"type": "function", "function": {"name": "x"}}]
     with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
-        await ask_ai_with_tools("q", real_tools)
+        await ask_ai_with_tools(
+            "q", real_tools, repository=_fake_repository(), chat_id=1
+        )
 
     payload = session.post.call_args.kwargs["json"]
     assert payload["tools"] == META_TOOLS
@@ -248,7 +269,9 @@ async def test_ask_ai_with_tools_reads_reference_then_calls_tool(monkeypatch):
     session_cm.__aexit__ = AsyncMock(return_value=None)
 
     with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
-        result = await ask_ai_with_tools("замьють спамера", real_tools)
+        result = await ask_ai_with_tools(
+            "замьють спамера", real_tools, repository=_fake_repository(), chat_id=1
+        )
 
     assert result.tool_name == "mute_user"
     assert result.tool_arguments == {"minutes": 10}
@@ -258,6 +281,43 @@ async def test_ask_ai_with_tools_reads_reference_then_calls_tool(monkeypatch):
     tool_messages = [m for m in second_call_payload["messages"] if m.get("role") == "tool"]
     assert len(tool_messages) == 1
     assert "mute_user" in tool_messages[0]["content"]
+
+
+async def test_ask_ai_with_tools_reads_general_info_then_answers(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    responses = [
+        _tool_call_response(READ_GENERAL_INFO, "{}"),
+        _text_response("Разработчик — Владислав Звездаев."),
+    ]
+
+    session = MagicMock()
+    post_cms = []
+    for resp in responses:
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=None)
+        post_cms.append(cm)
+    session.post = MagicMock(side_effect=post_cms)
+
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    repository = _fake_repository(broadcast_interval=15, reset_days=7)
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        result = await ask_ai_with_tools(
+            "кто тебя разработал?", [], repository=repository, chat_id=1
+        )
+
+    assert result.text == "Разработчик — Владислав Звездаев."
+    repository.get_chat_settings.assert_awaited_once_with(1)
+    repository.get_message_templates.assert_awaited_once_with(1)
+
+    second_call_payload = session.post.call_args_list[1].kwargs["json"]
+    tool_messages = [m for m in second_call_payload["messages"] if m.get("role") == "tool"]
+    assert len(tool_messages) == 1
+    assert "Владислав Звездаев" in tool_messages[0]["content"]
 
 
 async def test_ask_ai_with_tools_raises_after_max_rounds(monkeypatch):
@@ -279,7 +339,30 @@ async def test_ask_ai_with_tools_raises_after_max_rounds(monkeypatch):
 
     with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
         with pytest.raises(AIUnavailableError):
-            await ask_ai_with_tools("что ты умеешь?", tools=[])
+            await ask_ai_with_tools(
+                "что ты умеешь?", tools=[], repository=_fake_repository(), chat_id=1
+            )
+
+
+async def test_build_general_info_includes_developer_and_chat_settings():
+    repository = _fake_repository(
+        broadcast_interval=30,
+        reset_days=14,
+        templates=("Тише!", None, None),
+    )
+
+    info = await build_general_info(chat_id=42, repository=repository)
+
+    assert "Владислав Звездаев" in info
+    assert "22 года" in info
+    assert "фронтенд-разработчик" in info
+    assert "предупреждение" in info and "мьют" in info and "кик" in info
+    assert "14 дн." in info
+    assert "30 мин." in info
+    assert "Тише!" in info
+    assert "стандартный" in info
+    repository.get_chat_settings.assert_awaited_once_with(42)
+    repository.get_message_templates.assert_awaited_once_with(42)
 
 
 def test_build_tools_reference_lists_name_description_and_args():
