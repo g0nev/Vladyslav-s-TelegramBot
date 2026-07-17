@@ -75,6 +75,18 @@ async def test_addword_adds_word(repo):
     assert await repo.list_trigger_words(1) == ["спам"]
 
 
+async def test_addword_escapes_html_in_confirmation(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_addword(message, cmd("<script>"), bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Слово «&lt;script&gt;» добавлено в список триггеров."
+    )
+    assert await repo.list_trigger_words(1) == ["<script>"]
+
+
 async def test_addword_without_args(repo):
     bot = await make_bot(is_admin_user_id=1)
     message = make_message(user_id=1)

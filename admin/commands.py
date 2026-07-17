@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import html
+
 from aiogram import Bot, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
@@ -32,7 +34,7 @@ async def cmd_addword(
         return
     word = command.args.strip()
     await repository.add_trigger_word(message.chat.id, word)
-    await message.answer(f"Слово «{word}» добавлено в список триггеров.")
+    await message.answer(f"Слово «{html.escape(word)}» добавлено в список триггеров.")
 
 
 @router.message(Command("delword"))
@@ -47,9 +49,9 @@ async def cmd_delword(
     word = command.args.strip()
     deleted = await repository.delete_trigger_word(message.chat.id, word)
     if deleted:
-        await message.answer(f"Слово «{word}» удалено из списка триггеров.")
+        await message.answer(f"Слово «{html.escape(word)}» удалено из списка триггеров.")
     else:
-        await message.answer(f"Слово «{word}» не найдено в добавленных вручную.")
+        await message.answer(f"Слово «{html.escape(word)}» не найдено в добавленных вручную.")
 
 
 @router.message(Command("listwords"))
@@ -58,7 +60,8 @@ async def cmd_listwords(message: Message, repository: Repository) -> None:
     if not words:
         await message.answer("Дополнительных триггер-слов для этого чата нет.")
         return
-    await message.answer("Добавленные триггер-слова:\n" + "\n".join(sorted(words)))
+    escaped_words = (html.escape(word) for word in sorted(words))
+    await message.answer("Добавленные триггер-слова:\n" + "\n".join(escaped_words))
 
 
 @router.message(Command("warns"))
@@ -154,7 +157,7 @@ async def cmd_listmsgs(message: Message, bot: Bot, repository: Repository) -> No
     if not messages:
         await message.answer("Пул сообщений рассылки пуст.")
         return
-    lines = [f"{msg_id}: {text}" for msg_id, text in messages]
+    lines = [f"{msg_id}: {html.escape(text)}" for msg_id, text in messages]
     await message.answer("Сообщения рассылки:\n" + "\n".join(lines))
 
 

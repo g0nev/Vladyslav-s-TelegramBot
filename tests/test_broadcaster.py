@@ -35,6 +35,17 @@ async def test_send_broadcast_picks_message(repo):
     bot.send_message.assert_awaited_once_with(1, "Привет!")
 
 
+async def test_send_broadcast_escapes_html_special_chars(repo):
+    bot = AsyncMock()
+    await repo.add_broadcast_message(chat_id=1, text="<b>Скидка 10% & подарок</b>")
+
+    await send_broadcast(bot, repo, chat_id=1)
+
+    bot.send_message.assert_awaited_once_with(
+        1, "&lt;b&gt;Скидка 10% &amp; подарок&lt;/b&gt;"
+    )
+
+
 async def test_send_broadcast_skips_when_pool_empty(repo):
     bot = AsyncMock()
 

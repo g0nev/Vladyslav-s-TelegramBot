@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import random
 
 from aiogram import Bot
@@ -18,7 +19,7 @@ async def send_broadcast(bot: Bot, repository: Repository, chat_id: int) -> None
     if not messages:
         return
     _, text = random.choice(messages)
-    await bot.send_message(chat_id, text)
+    await bot.send_message(chat_id, html.escape(text))
 
 
 async def _scheduled_broadcast_job(

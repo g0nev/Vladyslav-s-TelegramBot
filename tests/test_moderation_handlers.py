@@ -91,6 +91,16 @@ async def test_custom_warn_message_is_used_when_set(repo):
     message.answer.assert_awaited_once_with("Хватит спамить, User100!")
 
 
+async def test_custom_warn_message_escapes_html_but_keeps_mention(repo):
+    bot = await make_bot()
+    await repo.set_warn_message(chat_id=1, text="<b>Стоп</b>, {mention}!")
+    message = make_message("спам")
+
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    message.answer.assert_awaited_once_with("&lt;b&gt;Стоп&lt;/b&gt;, User100!")
+
+
 async def test_default_warn_message_used_when_not_set(repo):
     bot = await make_bot()
     message = make_message("спам")

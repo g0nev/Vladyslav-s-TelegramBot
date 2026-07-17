@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot, F, Router
@@ -109,7 +110,9 @@ async def handle_moderated_message(
         punishment
     ]
     template = custom_template if custom_template else WARN_TEMPLATES[punishment]
-    text = format_punishment_message(template, mention=_mention(message), minutes=MUTE_MINUTES)
+    text = format_punishment_message(
+        html.escape(template, quote=False), mention=_mention(message), minutes=MUTE_MINUTES
+    )
     await message.answer(text)
 
 

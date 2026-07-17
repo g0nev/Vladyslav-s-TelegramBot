@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from typing import Optional
 
 from aiogram import Bot
@@ -184,7 +185,8 @@ async def execute_tool(
         words = await repository.list_trigger_words(chat_id)
         if not words:
             return "Дополнительных триггер-слов нет."
-        return "Триггер-слова:\n" + "\n".join(sorted(words))
+        escaped_words = (html.escape(word) for word in sorted(words))
+        return "Триггер-слова:\n" + "\n".join(escaped_words)
 
     if tool_name == "get_user_warnings":
         count, _ = await repository.get_warning(chat_id, target_id)
@@ -194,7 +196,7 @@ async def execute_tool(
         messages = await repository.list_broadcast_messages(chat_id)
         if not messages:
             return "Пул сообщений рассылки пуст."
-        lines = [f"{msg_id}: {text}" for msg_id, text in messages]
+        lines = [f"{msg_id}: {html.escape(text)}" for msg_id, text in messages]
         return "Сообщения рассылки:\n" + "\n".join(lines)
 
     if tool_name == "add_trigger_word":
@@ -202,7 +204,7 @@ async def execute_tool(
         if not word:
             return "Нужно указать непустое слово."
         await repository.add_trigger_word(chat_id, word)
-        return f"Слово «{word}» добавлено в список триггеров."
+        return f"Слово «{html.escape(word)}» добавлено в список триггеров."
 
     if tool_name == "delete_trigger_word":
         word = str(arguments.get("word", "")).strip()
@@ -210,8 +212,8 @@ async def execute_tool(
             return "Нужно указать непустое слово."
         deleted = await repository.delete_trigger_word(chat_id, word)
         if deleted:
-            return f"Слово «{word}» удалено из списка триггеров."
-        return f"Слово «{word}» не найдено в добавленных вручную."
+            return f"Слово «{html.escape(word)}» удалено из списка триггеров."
+        return f"Слово «{html.escape(word)}» не найдено в добавленных вручную."
 
     if tool_name == "reset_user_warnings":
         await repository.reset_warning(chat_id, target_id)

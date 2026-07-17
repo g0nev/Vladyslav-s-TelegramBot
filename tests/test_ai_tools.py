@@ -92,6 +92,13 @@ async def test_add_trigger_word(repo):
     assert await repo.list_trigger_words(1) == ["казино"]
 
 
+async def test_add_trigger_word_escapes_html_in_result(repo):
+    result = await execute_tool("add_trigger_word", {"word": "<script>"}, **_ctx(repo))
+    assert "&lt;script&gt;" in result
+    assert "<script>" not in result
+    assert await repo.list_trigger_words(1) == ["<script>"]
+
+
 async def test_add_trigger_word_rejects_empty(repo):
     result = await execute_tool("add_trigger_word", {"word": "   "}, **_ctx(repo))
     assert result == "Нужно указать непустое слово."
