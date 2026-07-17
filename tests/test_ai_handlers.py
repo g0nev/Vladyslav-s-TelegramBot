@@ -57,7 +57,9 @@ def make_callback(data, user_id=500):
 async def test_ask_without_args_shows_usage():
     message = make_message()
     await cmd_ask(message, cmd(None), AsyncMock(), AsyncMock(), MagicMock())
-    message.answer.assert_awaited_once_with("Использование: /ask <вопрос>")
+    message.answer.assert_awaited_once_with(
+        "Добрый день! Вы хотели ко мне обратиться? Тогда напишите /ask <вопрос>."
+    )
 
 
 async def test_ask_with_anonymous_admin_does_not_crash(repo):

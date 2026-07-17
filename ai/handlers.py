@@ -71,7 +71,9 @@ async def cmd_ask(
     scheduler: AsyncIOScheduler,
 ) -> None:
     if not command.args or not command.args.strip():
-        await message.answer("Использование: /ask <вопрос>")
+        await message.answer(
+            "Добрый день! Вы хотели ко мне обратиться? Тогда напишите /ask <вопрос>."
+        )
         return
 
     question = command.args.strip()
