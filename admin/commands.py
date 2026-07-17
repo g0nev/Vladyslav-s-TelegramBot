@@ -7,20 +7,11 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from admin.permissions import is_admin
+from admin.permissions import require_admin as _require_admin
 from db.repository import Repository
 from scheduler.broadcaster import schedule_chat_broadcast
 
 router = Router(name="admin")
-
-
-async def _require_admin(message: Message, bot: Bot) -> bool:
-    if message.from_user is None:
-        return False
-    if not await is_admin(bot, message.chat.id, message.from_user.id):
-        await message.answer("Эта команда доступна только администраторам чата.")
-        return False
-    return True
 
 
 @router.message(Command("addword"))
@@ -117,6 +108,38 @@ async def cmd_setinterval(
     await repository.set_broadcast_interval(message.chat.id, minutes)
     schedule_chat_broadcast(scheduler, bot, repository, message.chat.id, minutes)
     await message.answer(f"Интервал рассылки установлен: {minutes} мин. (0 = выключено).")
+
+
+@router.message(Command("setmuteminutes"))
+async def cmd_setmuteminutes(
+    message: Message, command: CommandObject, bot: Bot, repository: Repository
+) -> None:
+    if not await _require_admin(message, bot):
+        return
+    if (
+        not command.args
+        or not command.args.strip().isdigit()
+        or int(command.args.strip()) <= 0
+    ):
+        await message.answer("Использование: /setmuteminutes «число минут, больше 0»")
+        return
+    minutes = int(command.args.strip())
+    await repository.set_mute_minutes(message.chat.id, minutes)
+    await message.answer(f"Длительность мьюта установлена: {minutes} мин.")
+
+
+@router.message(Command("setkickafter"))
+async def cmd_setkickafter(
+    message: Message, command: CommandObject, bot: Bot, repository: Repository
+) -> None:
+    if not await _require_admin(message, bot):
+        return
+    if not command.args or not command.args.strip().isdigit() or int(command.args.strip()) < 2:
+        await message.answer("Использование: /setkickafter «число ≥ 2»")
+        return
+    violations = int(command.args.strip())
+    await repository.set_kick_after(message.chat.id, violations)
+    await message.answer(f"Кик теперь происходит начиная с {violations}-го нарушения.")
 
 
 @router.message(Command("addmsg"))

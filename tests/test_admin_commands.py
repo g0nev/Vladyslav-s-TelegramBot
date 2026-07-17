@@ -274,6 +274,79 @@ async def test_resetmsgs_requires_admin(repo):
     assert (await repo.get_message_templates(1))[0] == "кастом"
 
 
+async def test_setmuteminutes_rejects_non_numeric(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmuteminutes(message, cmd("много"), bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Использование: /setmuteminutes «число минут, больше 0»"
+    )
+
+
+async def test_setmuteminutes_rejects_zero(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmuteminutes(message, cmd("0"), bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Использование: /setmuteminutes «число минут, больше 0»"
+    )
+    mute_minutes, _ = await repo.get_escalation_settings(1)
+    assert mute_minutes == 5
+
+
+async def test_setmuteminutes_updates_value(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmuteminutes(message, cmd("20"), bot, repo)
+
+    mute_minutes, _ = await repo.get_escalation_settings(1)
+    assert mute_minutes == 20
+
+
+async def test_setmuteminutes_requires_admin(repo):
+    bot = await make_bot(is_admin_user_id=999)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmuteminutes(message, cmd("20"), bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Эта команда доступна только администраторам чата."
+    )
+
+
+async def test_setkickafter_rejects_less_than_two(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setkickafter(message, cmd("1"), bot, repo)
+
+    message.answer.assert_awaited_once_with("Использование: /setkickafter «число ≥ 2»")
+
+
+async def test_setkickafter_rejects_non_numeric(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setkickafter(message, cmd("много"), bot, repo)
+
+    message.answer.assert_awaited_once_with("Использование: /setkickafter «число ≥ 2»")
+
+
+async def test_setkickafter_updates_value(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setkickafter(message, cmd("5"), bot, repo)
+
+    _, kick_after = await repo.get_escalation_settings(1)
+    assert kick_after == 5
+
+
 async def test_resetmsgs_clears_all_templates(repo):
     bot = await make_bot(is_admin_user_id=1)
     await repo.set_warn_message(1, "кастом")

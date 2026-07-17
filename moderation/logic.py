@@ -42,6 +42,7 @@ def compute_violation(
     last_violation_at: Optional[datetime],
     reset_days: int,
     now: datetime,
+    kick_after: int = 3,
 ) -> tuple[int, str]:
     if last_violation_at is not None and reset_days > 0:
         if now - last_violation_at > timedelta(days=reset_days):
@@ -51,6 +52,6 @@ def compute_violation(
 
     if new_count == 1:
         return new_count, "warn"
-    if new_count == 2:
-        return new_count, "mute"
-    return 0, "kick"
+    if new_count >= kick_after:
+        return 0, "kick"
+    return new_count, "mute"

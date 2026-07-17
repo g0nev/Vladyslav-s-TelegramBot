@@ -8,7 +8,15 @@ import aiosqlite
 
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "models.sql")
 
-_MIGRATION_COLUMNS = ("warn_message", "mute_message", "kick_message")
+_MIGRATION_COLUMNS = {
+    "warn_message": "TEXT",
+    "mute_message": "TEXT",
+    "kick_message": "TEXT",
+    "saved_permissions_json": "TEXT",
+    "last_invite_link": "TEXT",
+    "mute_minutes": "INTEGER NOT NULL DEFAULT 5",
+    "kick_after_violation": "INTEGER NOT NULL DEFAULT 3",
+}
 
 
 class Repository:
@@ -23,9 +31,11 @@ class Repository:
         conn = await aiosqlite.connect(db_path)
         with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
             await conn.executescript(f.read())
-        for column in _MIGRATION_COLUMNS:
+        for column, column_type in _MIGRATION_COLUMNS.items():
             try:
-                await conn.execute(f"ALTER TABLE chat_settings ADD COLUMN {column} TEXT")
+                await conn.execute(
+                    f"ALTER TABLE chat_settings ADD COLUMN {column} {column_type}"
+                )
             except sqlite3.OperationalError:
                 pass
         await conn.commit()
@@ -187,3 +197,59 @@ class Repository:
         )
         rows = await cursor.fetchall()
         return [(row[0], row[1]) for row in rows]
+
+    async def get_saved_permissions(self, chat_id: int) -> Optional[str]:
+        await self.get_chat_settings(chat_id)
+        cursor = await self._conn.execute(
+            "SELECT saved_permissions_json FROM chat_settings WHERE chat_id = ?", (chat_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0]
+
+    async def set_saved_permissions(self, chat_id: int, permissions_json: Optional[str]) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET saved_permissions_json = ? WHERE chat_id = ?",
+            (permissions_json, chat_id),
+        )
+        await self._conn.commit()
+
+    async def get_last_invite_link(self, chat_id: int) -> Optional[str]:
+        await self.get_chat_settings(chat_id)
+        cursor = await self._conn.execute(
+            "SELECT last_invite_link FROM chat_settings WHERE chat_id = ?", (chat_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0]
+
+    async def set_last_invite_link(self, chat_id: int, link: Optional[str]) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET last_invite_link = ? WHERE chat_id = ?",
+            (link, chat_id),
+        )
+        await self._conn.commit()
+
+    async def get_escalation_settings(self, chat_id: int) -> tuple[int, int]:
+        await self.get_chat_settings(chat_id)
+        cursor = await self._conn.execute(
+            "SELECT mute_minutes, kick_after_violation FROM chat_settings WHERE chat_id = ?",
+            (chat_id,),
+        )
+        row = await cursor.fetchone()
+        return (row[0], row[1])
+
+    async def set_mute_minutes(self, chat_id: int, minutes: int) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET mute_minutes = ? WHERE chat_id = ?", (minutes, chat_id)
+        )
+        await self._conn.commit()
+
+    async def set_kick_after(self, chat_id: int, violations: int) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET kick_after_violation = ? WHERE chat_id = ?",
+            (violations, chat_id),
+        )
+        await self._conn.commit()

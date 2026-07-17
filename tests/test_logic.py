@@ -58,6 +58,33 @@ def test_compute_violation_never_resets_when_reset_days_zero():
     assert (count, punishment) == (2, "mute")
 
 
+def test_compute_violation_default_kick_after_matches_current_behavior():
+    count, punishment = compute_violation(
+        2, datetime(2026, 1, 1), reset_days=30, now=datetime(2026, 1, 1, 1)
+    )
+    assert (count, punishment) == (0, "kick")
+
+
+def test_compute_violation_kick_after_two_skips_mute():
+    count, punishment = compute_violation(
+        1, datetime(2026, 1, 1), reset_days=30, now=datetime(2026, 1, 1, 1), kick_after=2
+    )
+    assert (count, punishment) == (0, "kick")
+
+
+def test_compute_violation_kick_after_five_mutes_repeatedly():
+    now = datetime(2026, 1, 1, 1)
+    last = datetime(2026, 1, 1)
+    for expected_count in (2, 3, 4):
+        count, punishment = compute_violation(
+            expected_count - 1, last, reset_days=30, now=now, kick_after=5
+        )
+        assert (count, punishment) == (expected_count, "mute")
+
+    count, punishment = compute_violation(4, last, reset_days=30, now=now, kick_after=5)
+    assert (count, punishment) == (0, "kick")
+
+
 def test_format_punishment_message_substitutes_known_placeholders():
     result = format_punishment_message("{mention}, тихо {minutes} минут.", mention="User", minutes=5)
     assert result == "User, тихо 5 минут."

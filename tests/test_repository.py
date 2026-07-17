@@ -113,4 +113,43 @@ async def test_migration_adds_columns_to_preexisting_db(tmp_path):
     assert templates == (None, None, None)
     interval, _ = await reopened_repo.get_chat_settings(chat_id=1)
     assert interval == 10
+    mute_minutes, kick_after = await reopened_repo.get_escalation_settings(chat_id=1)
+    assert (mute_minutes, kick_after) == (5, 3)
     await reopened_repo.close()
+
+
+async def test_saved_permissions_lifecycle(repo):
+    assert await repo.get_saved_permissions(chat_id=1) is None
+
+    await repo.set_saved_permissions(chat_id=1, permissions_json='{"can_send_messages": true}')
+    assert await repo.get_saved_permissions(chat_id=1) == '{"can_send_messages": true}'
+
+    await repo.set_saved_permissions(chat_id=1, permissions_json=None)
+    assert await repo.get_saved_permissions(chat_id=1) is None
+
+
+async def test_last_invite_link_lifecycle(repo):
+    assert await repo.get_last_invite_link(chat_id=1) is None
+
+    await repo.set_last_invite_link(chat_id=1, link="https://t.me/joinchat/abc")
+    assert await repo.get_last_invite_link(chat_id=1) == "https://t.me/joinchat/abc"
+
+    await repo.set_last_invite_link(chat_id=1, link=None)
+    assert await repo.get_last_invite_link(chat_id=1) is None
+
+
+async def test_escalation_settings_defaults(repo):
+    mute_minutes, kick_after = await repo.get_escalation_settings(chat_id=1)
+    assert (mute_minutes, kick_after) == (5, 3)
+
+
+async def test_set_mute_minutes(repo):
+    await repo.set_mute_minutes(chat_id=1, minutes=15)
+    mute_minutes, _ = await repo.get_escalation_settings(chat_id=1)
+    assert mute_minutes == 15
+
+
+async def test_set_kick_after(repo):
+    await repo.set_kick_after(chat_id=1, violations=5)
+    _, kick_after = await repo.get_escalation_settings(chat_id=1)
+    assert kick_after == 5

@@ -23,6 +23,18 @@ def test_bot_commands_cover_all_commands():
         "setkickmsg",
         "resetmsgs",
         "ask",
+        "setmuteminutes",
+        "setkickafter",
+        "pin",
+        "unpin",
+        "lock",
+        "unlock",
+        "newlink",
+        "revokelink",
+        "chatinfo",
+        "settitle",
+        "setdescription",
+        "setphoto",
     }
 
 

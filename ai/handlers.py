@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -42,6 +43,9 @@ NO_RIGHTS_MESSAGE = "Не удалось: боту не хватает прав.
 CANCELLED_MESSAGE = "Действие отменено."
 
 
+PENDING_ACTION_TTL = timedelta(minutes=10)
+
+
 @dataclass
 class PendingAction:
     admin_user_id: int
@@ -50,9 +54,21 @@ class PendingAction:
     target_user_id: int
     target_mention: str
     minutes: int
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 _pending_actions: dict[str, PendingAction] = {}
+
+
+def _purge_expired_pending_actions() -> None:
+    now = datetime.now(timezone.utc)
+    expired = [
+        token
+        for token, pending in _pending_actions.items()
+        if now - pending.created_at > PENDING_ACTION_TTL
+    ]
+    for token in expired:
+        _pending_actions.pop(token, None)
 
 
 def _extract_minutes(arguments: dict) -> int:
@@ -124,6 +140,7 @@ async def cmd_ask(
         return
 
     if tool_name in CONFIRMATION_TOOLS:
+        _purge_expired_pending_actions()
         minutes = _extract_minutes(response.tool_arguments)
         token = uuid.uuid4().hex
         _pending_actions[token] = PendingAction(
@@ -174,6 +191,7 @@ async def on_ai_confirm(callback: CallbackQuery, bot: Bot) -> None:
         return
     _, token, decision = parts
 
+    _purge_expired_pending_actions()
     pending = _pending_actions.get(token)
     if pending is None:
         await callback.answer(EXPIRED_MESSAGE, show_alert=True)
@@ -186,7 +204,7 @@ async def on_ai_confirm(callback: CallbackQuery, bot: Bot) -> None:
     _pending_actions.pop(token, None)
 
     if decision == "no":
-        await callback.message.edit_text(CANCELLED_MESSAGE)
+        await callback.message.edit_text(CANCELLED_MESSAGE, reply_markup=None)
         await callback.answer()
         return
 
@@ -203,5 +221,5 @@ async def on_ai_confirm(callback: CallbackQuery, bot: Bot) -> None:
         ok = await kick_user(bot, pending.chat_id, pending.target_user_id)
         text = f"{pending.target_mention} удалён из чата." if ok else NO_RIGHTS_MESSAGE
 
-    await callback.message.edit_text(text)
+    await callback.message.edit_text(text, reply_markup=None)
     await callback.answer()

@@ -8,7 +8,6 @@ import aiohttp
 
 import config
 from db.repository import Repository
-from moderation.handlers import MUTE_MINUTES
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -127,17 +126,28 @@ def build_tools_reference(tools: list[dict]) -> str:
 async def build_general_info(chat_id: int, repository: Repository) -> str:
     broadcast_interval, reset_days = await repository.get_chat_settings(chat_id)
     warn_message, mute_message, kick_message = await repository.get_message_templates(chat_id)
+    mute_minutes, kick_after = await repository.get_escalation_settings(chat_id)
 
     def _template(text: Optional[str]) -> str:
         return text if text else "не задан (используется стандартный)"
+
+    if kick_after <= 2:
+        escalation_rule = (
+            f"1-е нарушение — предупреждение; {kick_after}-е и далее — кик из чата, "
+            "счётчик сбрасывается."
+        )
+    else:
+        escalation_rule = (
+            f"1-е нарушение — предупреждение; со 2-го по {kick_after - 1}-е — мьют на "
+            f"{mute_minutes} мин.; {kick_after}-е и далее — кик из чата, счётчик сбрасывается."
+        )
 
     return (
         "О боте: это Telegram-бот модерации чата, который также отвечает на вопросы "
         "через ИИ по команде /ask.\n"
         "Разработчик: Владислав Звездаев. Если спросят конкретно, кто такой Владислав "
         "(а не просто кто разработчик) — ему 22 года, он фронтенд-разработчик.\n"
-        "Логика модерации: 1-е нарушение — предупреждение; 2-е — мьют на "
-        f"{MUTE_MINUTES} мин.; 3-е и далее — кик из чата, счётчик сбрасывается.\n"
+        f"Логика модерации: {escalation_rule}\n"
         "Настройки этого чата:\n"
         f"    • автосброс счётчика предупреждений: {reset_days} дн. (0 = никогда)\n"
         f"    • интервал автоматической рассылки: {broadcast_interval} мин. (0 = выключено)\n"

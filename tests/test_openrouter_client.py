@@ -17,10 +17,16 @@ from ai.openrouter_client import (
 )
 
 
-def _fake_repository(broadcast_interval=0, reset_days=0, templates=(None, None, None)):
+def _fake_repository(
+    broadcast_interval=0,
+    reset_days=0,
+    templates=(None, None, None),
+    escalation=(5, 3),
+):
     repository = MagicMock()
     repository.get_chat_settings = AsyncMock(return_value=(broadcast_interval, reset_days))
     repository.get_message_templates = AsyncMock(return_value=templates)
+    repository.get_escalation_settings = AsyncMock(return_value=escalation)
     return repository
 
 
@@ -361,8 +367,28 @@ async def test_build_general_info_includes_developer_and_chat_settings():
     assert "30 мин." in info
     assert "Тише!" in info
     assert "стандартный" in info
+    assert "5 мин." in info
     repository.get_chat_settings.assert_awaited_once_with(42)
     repository.get_message_templates.assert_awaited_once_with(42)
+    repository.get_escalation_settings.assert_awaited_once_with(42)
+
+
+async def test_build_general_info_reflects_custom_escalation_settings():
+    repository = _fake_repository(escalation=(20, 5))
+
+    info = await build_general_info(chat_id=1, repository=repository)
+
+    assert "20 мин." in info
+    assert "5-е и далее" in info
+
+
+async def test_build_general_info_kick_after_two_has_no_mute_stage():
+    repository = _fake_repository(escalation=(5, 2))
+
+    info = await build_general_info(chat_id=1, repository=repository)
+
+    assert "2-е и далее" in info
+    assert "мьют на" not in info
 
 
 def test_build_tools_reference_lists_name_description_and_args():

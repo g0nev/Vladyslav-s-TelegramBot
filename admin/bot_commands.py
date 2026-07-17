@@ -19,6 +19,18 @@ BOT_COMMANDS: list[BotCommand] = [
     BotCommand(command="setmutemsg", description="Текст мьюта за 2-е нарушение (админ)"),
     BotCommand(command="setkickmsg", description="Текст кика за 3-е нарушение (админ)"),
     BotCommand(command="resetmsgs", description="Сбросить тексты наказаний к стандартным (админ)"),
+    BotCommand(command="setmuteminutes", description="Длительность мьюта в минутах (админ)"),
+    BotCommand(command="setkickafter", description="Номер нарушения, после которого кик (админ, ≥2)"),
+    BotCommand(command="pin", description="Закрепить сообщение (админ, ответом на сообщение)"),
+    BotCommand(command="unpin", description="Открепить сообщение (админ)"),
+    BotCommand(command="lock", description="Заблокировать чат — писать могут только админы (админ)"),
+    BotCommand(command="unlock", description="Разблокировать чат (админ)"),
+    BotCommand(command="newlink", description="Создать новую инвайт-ссылку (админ)"),
+    BotCommand(command="revokelink", description="Отозвать последнюю инвайт-ссылку (админ)"),
+    BotCommand(command="chatinfo", description="Информация о чате: участники и админы"),
+    BotCommand(command="settitle", description="Изменить название чата (админ)"),
+    BotCommand(command="setdescription", description="Изменить описание чата (админ)"),
+    BotCommand(command="setphoto", description="Изменить фото чата (админ, фото с подписью /setphoto)"),
 ]
 
 

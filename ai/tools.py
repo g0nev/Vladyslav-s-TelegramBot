@@ -147,6 +147,31 @@ ADMIN_ONLY_TOOLS: list[dict] = [
         "reset_punishment_messages",
         "Сбросить тексты наказаний (предупреждение/мьют/кик) к значениям по умолчанию.",
     ),
+    _tool(
+        "set_mute_minutes",
+        "Установить длительность мьюта в минутах для этого чата.",
+        {
+            "type": "object",
+            "properties": {
+                "minutes": {"type": "integer", "description": "Длительность мьюта в минутах."}
+            },
+            "required": ["minutes"],
+        },
+    ),
+    _tool(
+        "set_kick_after",
+        "Установить, после какого по счёту нарушения происходит кик (минимум 2).",
+        {
+            "type": "object",
+            "properties": {
+                "violations": {
+                    "type": "integer",
+                    "description": "Номер нарушения, после которого кик, минимум 2.",
+                }
+            },
+            "required": ["violations"],
+        },
+    ),
 ]
 
 ADMIN_TOOLS: list[dict] = PUBLIC_TOOLS + ADMIN_ONLY_TOOLS
@@ -268,5 +293,19 @@ async def execute_tool(
     if tool_name == "reset_punishment_messages":
         await repository.reset_message_templates(chat_id)
         return "Тексты наказаний сброшены к значениям по умолчанию."
+
+    if tool_name == "set_mute_minutes":
+        minutes = _as_int(arguments.get("minutes"))
+        if minutes <= 0:
+            return "Нужно указать положительное число минут."
+        await repository.set_mute_minutes(chat_id, minutes)
+        return f"Длительность мьюта установлена: {minutes} мин."
+
+    if tool_name == "set_kick_after":
+        violations = _as_int(arguments.get("violations"))
+        if violations < 2:
+            return "Кик может происходить не раньше 2-го нарушения."
+        await repository.set_kick_after(chat_id, violations)
+        return f"Кик теперь происходит начиная с {violations}-го нарушения."
 
     return "Не могу выполнить этот запрос."

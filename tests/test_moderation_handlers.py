@@ -173,6 +173,38 @@ async def test_missing_permissions_on_mute_does_not_bump_count(repo):
     assert count == 1
 
 
+async def test_configured_mute_minutes_used_for_restriction_and_message(repo):
+    from datetime import datetime, timedelta
+
+    await repo.set_mute_minutes(chat_id=1, minutes=20)
+    bot = await make_bot()
+    message = make_message("спам")
+
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    _, kwargs = bot.restrict_chat_member.await_args
+    until_date = kwargs["until_date"]
+    now = datetime.now(until_date.tzinfo)
+    assert abs((until_date - now) - timedelta(minutes=20)) < timedelta(seconds=5)
+    sent_text = message.answer.await_args.args[0]
+    assert "20 минут" in sent_text
+
+
+async def test_configured_kick_after_triggers_kick_earlier(repo):
+    await repo.set_kick_after(chat_id=1, violations=2)
+    bot = await make_bot()
+    message = make_message("спам")
+
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    bot.restrict_chat_member.assert_not_called()
+    bot.ban_chat_member.assert_awaited_once()
+    count, _ = await repo.get_warning(chat_id=1, user_id=100)
+    assert count == 0
+
+
 async def test_missing_permissions_on_kick_does_not_reset_count(repo):
     bot = await make_bot()
     message = make_message("спам")

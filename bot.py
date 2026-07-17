@@ -8,6 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import config
 from admin.bot_commands import register_commands
 from admin.commands import router as admin_router
+from admin.group_commands import router as group_router
 from ai.handlers import router as ai_router
 from db.repository import Repository
 from moderation.handlers import router as moderation_router
@@ -21,6 +22,7 @@ async def main() -> None:
     bot = Bot(token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     dp = Dispatcher()
     dp.include_router(admin_router)
+    dp.include_router(group_router)
     dp.include_router(ai_router)
     dp.include_router(moderation_router)
     await register_commands(bot)

@@ -41,8 +41,9 @@ def test_tool_sets_have_expected_shape():
         "list_broadcast_messages",
     }
     assert PUBLIC_TOOL_NAMES <= ADMIN_TOOL_NAMES
-    assert len(ADMIN_TOOL_NAMES) == 16
+    assert len(ADMIN_TOOL_NAMES) == 18
     assert {"mute_user", "kick_user"} <= ADMIN_TOOL_NAMES
+    assert {"set_mute_minutes", "set_kick_after"} <= ADMIN_TOOL_NAMES
     assert CONFIRMATION_TOOLS == {"mute_user", "kick_user"}
     assert TARGET_REQUIRED_TOOLS == {
         "get_user_warnings",
@@ -186,6 +187,30 @@ async def test_reset_punishment_messages(repo):
     assert "сброшены" in result
     warn, _, _ = await repo.get_message_templates(1)
     assert warn is None
+
+
+async def test_set_mute_minutes(repo):
+    result = await execute_tool("set_mute_minutes", {"minutes": 15}, **_ctx(repo))
+    assert "15" in result
+    mute_minutes, _ = await repo.get_escalation_settings(1)
+    assert mute_minutes == 15
+
+
+async def test_set_mute_minutes_rejects_non_positive(repo):
+    result = await execute_tool("set_mute_minutes", {"minutes": 0}, **_ctx(repo))
+    assert result == "Нужно указать положительное число минут."
+
+
+async def test_set_kick_after(repo):
+    result = await execute_tool("set_kick_after", {"violations": 5}, **_ctx(repo))
+    assert "5" in result
+    _, kick_after = await repo.get_escalation_settings(1)
+    assert kick_after == 5
+
+
+async def test_set_kick_after_rejects_less_than_two(repo):
+    result = await execute_tool("set_kick_after", {"violations": 1}, **_ctx(repo))
+    assert result == "Кик может происходить не раньше 2-го нарушения."
 
 
 async def test_unknown_tool_returns_block_message(repo):

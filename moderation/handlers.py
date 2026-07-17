@@ -18,8 +18,6 @@ from moderation.logic import (
 
 router = Router(name="moderation")
 
-MUTE_MINUTES = 5
-
 WARN_TEMPLATES = {
     "warn": "{mention}, предупреждение: сообщение нарушает правила чата.",
     "mute": "{mention} получает ограничение на отправку сообщений на {minutes} минут "
@@ -69,13 +67,16 @@ async def handle_moderated_message(
         message.chat.id, message.from_user.id
     )
     _, reset_days = await repository.get_chat_settings(message.chat.id)
+    mute_minutes, kick_after = await repository.get_escalation_settings(message.chat.id)
 
     last_violation_at = (
         datetime.fromisoformat(last_violation_at_raw) if last_violation_at_raw else None
     )
     now = datetime.now(timezone.utc)
 
-    new_count, punishment = compute_violation(count, last_violation_at, reset_days, now)
+    new_count, punishment = compute_violation(
+        count, last_violation_at, reset_days, now, kick_after=kick_after
+    )
 
     if punishment == "mute":
         try:
@@ -83,7 +84,7 @@ async def handle_moderated_message(
                 message.chat.id,
                 message.from_user.id,
                 permissions=ChatPermissions(can_send_messages=False),
-                until_date=now + timedelta(minutes=MUTE_MINUTES),
+                until_date=now + timedelta(minutes=mute_minutes),
             )
         except TelegramAPIError:
             await _notify_missing_permissions(message)
@@ -111,7 +112,7 @@ async def handle_moderated_message(
     ]
     template = custom_template if custom_template else WARN_TEMPLATES[punishment]
     text = format_punishment_message(
-        html.escape(template, quote=False), mention=_mention(message), minutes=MUTE_MINUTES
+        html.escape(template, quote=False), mention=_mention(message), minutes=mute_minutes
     )
     await message.answer(text)
 

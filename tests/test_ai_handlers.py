@@ -254,3 +254,55 @@ async def test_confirmation_with_unknown_token_reports_expired():
     await on_ai_confirm(callback, bot)
     callback.answer.assert_awaited_once()
     assert callback.answer.await_args.kwargs.get("show_alert") is True
+
+
+async def test_confirmation_yes_clears_reply_markup(repo):
+    message = make_message(user_id=500, reply_user_id=100)
+    bot = AsyncMock()
+    response = AIResponse(tool_name="mute_user", tool_arguments={"minutes": 10})
+    with patch("ai.handlers.is_admin", AsyncMock(return_value=True)):
+        with patch("ai.handlers.ask_ai_with_tools", AsyncMock(return_value=response)):
+            await cmd_ask(message, cmd("замьють"), bot, repo, MagicMock())
+
+    token = next(iter(handlers._pending_actions))
+    callback = make_callback(f"aiconfirm:{token}:yes", user_id=500)
+    await on_ai_confirm(callback, bot)
+
+    assert callback.message.edit_text.await_args.kwargs.get("reply_markup") is None
+
+
+async def test_confirmation_no_clears_reply_markup(repo):
+    message = make_message(user_id=500, reply_user_id=100)
+    bot = AsyncMock()
+    response = AIResponse(tool_name="mute_user", tool_arguments={"minutes": 10})
+    with patch("ai.handlers.is_admin", AsyncMock(return_value=True)):
+        with patch("ai.handlers.ask_ai_with_tools", AsyncMock(return_value=response)):
+            await cmd_ask(message, cmd("замьють"), bot, repo, MagicMock())
+
+    token = next(iter(handlers._pending_actions))
+    callback = make_callback(f"aiconfirm:{token}:no", user_id=500)
+    await on_ai_confirm(callback, bot)
+
+    assert callback.message.edit_text.await_args.kwargs.get("reply_markup") is None
+
+
+async def test_expired_pending_action_reports_expired_and_is_purged(repo):
+    from datetime import timedelta
+
+    message = make_message(user_id=500, reply_user_id=100)
+    bot = AsyncMock()
+    response = AIResponse(tool_name="mute_user", tool_arguments={"minutes": 10})
+    with patch("ai.handlers.is_admin", AsyncMock(return_value=True)):
+        with patch("ai.handlers.ask_ai_with_tools", AsyncMock(return_value=response)):
+            await cmd_ask(message, cmd("замьють"), bot, repo, MagicMock())
+
+    token = next(iter(handlers._pending_actions))
+    handlers._pending_actions[token].created_at -= handlers.PENDING_ACTION_TTL + timedelta(minutes=1)
+
+    callback = make_callback(f"aiconfirm:{token}:yes", user_id=500)
+    await on_ai_confirm(callback, bot)
+
+    callback.answer.assert_awaited_once()
+    assert callback.answer.await_args.kwargs.get("show_alert") is True
+    assert token not in handlers._pending_actions
+    bot.restrict_chat_member.assert_not_awaited()

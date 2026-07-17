@@ -18,7 +18,11 @@ CREATE TABLE IF NOT EXISTS chat_settings (
     reset_days INTEGER NOT NULL DEFAULT 30,
     warn_message TEXT,
     mute_message TEXT,
-    kick_message TEXT
+    kick_message TEXT,
+    saved_permissions_json TEXT,
+    last_invite_link TEXT,
+    mute_minutes INTEGER NOT NULL DEFAULT 5,
+    kick_after_violation INTEGER NOT NULL DEFAULT 3
 );
 
 CREATE TABLE IF NOT EXISTS broadcast_messages (
