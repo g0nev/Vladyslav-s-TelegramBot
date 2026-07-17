@@ -60,6 +60,18 @@ async def test_ask_without_args_shows_usage():
     message.answer.assert_awaited_once_with("Использование: /ask <вопрос>")
 
 
+async def test_ask_with_anonymous_admin_does_not_crash(repo):
+    message = SimpleNamespace(
+        chat=SimpleNamespace(id=1),
+        from_user=None,
+        reply_to_message=None,
+        answer=AsyncMock(),
+    )
+    with patch("ai.handlers.ask_ai_with_tools", AsyncMock()) as llm:
+        await cmd_ask(message, cmd("привет"), AsyncMock(), repo, MagicMock())
+    llm.assert_not_awaited()
+
+
 async def test_hard_block_short_circuits_before_llm(repo):
     message = make_message()
     with patch("ai.handlers.ask_ai_with_tools", AsyncMock()) as llm:

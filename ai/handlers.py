@@ -76,6 +76,9 @@ async def cmd_ask(
 
     question = command.args.strip()
 
+    if message.from_user is None:
+        return
+
     if check_hard_block(question):
         await message.answer(BLOCK_MESSAGE)
         return
