@@ -28,7 +28,7 @@ async def cmd_addword(
     if not await _require_admin(message, bot):
         return
     if not command.args or not command.args.strip():
-        await message.answer("Использование: /addword <слово>")
+        await message.answer("Использование: /addword «слово»")
         return
     word = command.args.strip()
     await repository.add_trigger_word(message.chat.id, word)
@@ -42,7 +42,7 @@ async def cmd_delword(
     if not await _require_admin(message, bot):
         return
     if not command.args:
-        await message.answer("Использование: /delword <слово>")
+        await message.answer("Использование: /delword «слово»")
         return
     word = command.args.strip()
     deleted = await repository.delete_trigger_word(message.chat.id, word)
@@ -90,7 +90,7 @@ async def cmd_setresetdays(
     if not await _require_admin(message, bot):
         return
     if not command.args or not command.args.strip().isdigit():
-        await message.answer("Использование: /setresetdays <число дней, 0 = никогда>")
+        await message.answer("Использование: /setresetdays «число дней, 0 = никогда»")
         return
     days = int(command.args.strip())
     await repository.set_reset_days(message.chat.id, days)
@@ -108,7 +108,7 @@ async def cmd_setinterval(
     if not await _require_admin(message, bot):
         return
     if not command.args or not command.args.strip().isdigit():
-        await message.answer("Использование: /setinterval <минуты, 0 = выключить>")
+        await message.answer("Использование: /setinterval «минуты, 0 = выключить»")
         return
     minutes = int(command.args.strip())
     await repository.set_broadcast_interval(message.chat.id, minutes)
@@ -123,7 +123,7 @@ async def cmd_addmsg(
     if not await _require_admin(message, bot):
         return
     if not command.args:
-        await message.answer("Использование: /addmsg <текст сообщения>")
+        await message.answer("Использование: /addmsg «текст сообщения»")
         return
     await repository.add_broadcast_message(message.chat.id, command.args)
     await message.answer("Сообщение добавлено в пул рассылки.")
@@ -136,7 +136,7 @@ async def cmd_delmsg(
     if not await _require_admin(message, bot):
         return
     if not command.args or not command.args.strip().isdigit():
-        await message.answer("Использование: /delmsg <номер из /listmsgs>")
+        await message.answer("Использование: /delmsg «номер из /listmsgs»")
         return
     message_id = int(command.args.strip())
     deleted = await repository.delete_broadcast_message(message.chat.id, message_id)
@@ -159,7 +159,7 @@ async def cmd_listmsgs(message: Message, bot: Bot, repository: Repository) -> No
 
 
 _SETMSG_USAGE = (
-    "Использование: {command} <текст>\n"
+    "Использование: {command} «текст»\n"
     "Доступные плейсхолдеры: {{mention}} — упоминание пользователя, "
     "{{minutes}} — длительность мьюта в минутах."
 )

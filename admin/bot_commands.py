@@ -4,7 +4,7 @@ from aiogram import Bot
 from aiogram.types import BotCommand, MenuButtonCommands
 
 BOT_COMMANDS: list[BotCommand] = [
-    BotCommand(command="ask", description="Задать вопрос ИИ: /ask <вопрос>"),
+    BotCommand(command="ask", description="Задать вопрос ИИ: /ask «вопрос»"),
     BotCommand(command="addword", description="Добавить слово-триггер (админ)"),
     BotCommand(command="delword", description="Удалить слово-триггер (админ)"),
     BotCommand(command="listwords", description="Показать добавленные триггер-слова"),

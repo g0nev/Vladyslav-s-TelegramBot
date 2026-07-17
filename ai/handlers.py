@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     CallbackQuery,
@@ -72,7 +73,7 @@ async def cmd_ask(
 ) -> None:
     if not command.args or not command.args.strip():
         await message.answer(
-            "Добрый день! Вы хотели ко мне обратиться? Тогда напишите /ask <вопрос>."
+            "Добрый день! Вы хотели ко мне обратиться? Тогда напишите /ask «вопрос»."
         )
         return
 
@@ -100,7 +101,14 @@ async def cmd_ask(
         return
 
     if response.tool_name is None:
-        await message.answer(response.text or UNAVAILABLE_MESSAGE, parse_mode="Markdown")
+        text = response.text or UNAVAILABLE_MESSAGE
+        try:
+            await message.answer(text, parse_mode="Markdown")
+        except TelegramBadRequest:
+            # Model output can contain unbalanced markdown (e.g. a lone "*"),
+            # which Telegram's parser rejects outright. Fall back to plain text
+            # rather than losing the reply entirely.
+            await message.answer(text, parse_mode=None)
         return
 
     tool_name = response.tool_name

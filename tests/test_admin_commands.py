@@ -81,7 +81,7 @@ async def test_addword_without_args(repo):
 
     await commands.cmd_addword(message, cmd(None), bot, repo)
 
-    message.answer.assert_awaited_once_with("Использование: /addword <слово>")
+    message.answer.assert_awaited_once_with("Использование: /addword «слово»")
 
 
 async def test_addword_whitespace_only_args(repo):
@@ -90,7 +90,7 @@ async def test_addword_whitespace_only_args(repo):
 
     await commands.cmd_addword(message, cmd("   "), bot, repo)
 
-    message.answer.assert_awaited_once_with("Использование: /addword <слово>")
+    message.answer.assert_awaited_once_with("Использование: /addword «слово»")
     assert await repo.list_trigger_words(1) == []
 
 
@@ -140,7 +140,7 @@ async def test_setresetdays_rejects_non_numeric(repo):
     await commands.cmd_setresetdays(message, cmd("много"), bot, repo)
 
     message.answer.assert_awaited_once_with(
-        "Использование: /setresetdays <число дней, 0 = никогда>"
+        "Использование: /setresetdays «число дней, 0 = никогда»"
     )
 
 

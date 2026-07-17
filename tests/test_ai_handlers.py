@@ -58,7 +58,7 @@ async def test_ask_without_args_shows_usage():
     message = make_message()
     await cmd_ask(message, cmd(None), AsyncMock(), AsyncMock(), MagicMock())
     message.answer.assert_awaited_once_with(
-        "Добрый день! Вы хотели ко мне обратиться? Тогда напишите /ask <вопрос>."
+        "Добрый день! Вы хотели ко мне обратиться? Тогда напишите /ask «вопрос»."
     )
 
 
@@ -118,6 +118,28 @@ async def test_text_response_is_forwarded(repo):
         with patch("ai.handlers.ask_ai_with_tools", AsyncMock(return_value=AIResponse(text="42"))):
             await cmd_ask(message, cmd("смысл жизни"), AsyncMock(), repo, MagicMock())
     message.answer.assert_awaited_once_with("42", parse_mode="Markdown")
+
+
+async def test_text_response_falls_back_to_plain_on_bad_markdown(repo):
+    from aiogram.exceptions import TelegramBadRequest
+
+    message = make_message()
+    message.answer = AsyncMock(
+        side_effect=[
+            TelegramBadRequest(method=MagicMock(), message="can't parse entities"),
+            None,
+        ]
+    )
+    with patch("ai.handlers.is_admin", AsyncMock(return_value=False)):
+        with patch(
+            "ai.handlers.ask_ai_with_tools",
+            AsyncMock(return_value=AIResponse(text="list_trigger_words *broken")),
+        ):
+            await cmd_ask(message, cmd("что умеешь"), AsyncMock(), repo, MagicMock())
+
+    assert message.answer.await_count == 2
+    message.answer.assert_any_await("list_trigger_words *broken", parse_mode="Markdown")
+    message.answer.assert_any_await("list_trigger_words *broken", parse_mode=None)
 
 
 async def test_ai_unavailable_reports(repo):
