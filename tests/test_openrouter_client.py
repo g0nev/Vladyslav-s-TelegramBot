@@ -3,7 +3,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import config
-from ai.openrouter_client import AIResponse, AIUnavailableError, ask_ai, ask_ai_with_tools
+from ai.openrouter_client import (
+    CALL_TOOL,
+    META_TOOLS,
+    READ_TOOLS_REFERENCE,
+    AIResponse,
+    AIUnavailableError,
+    ask_ai,
+    ask_ai_with_tools,
+    build_tools_reference,
+)
 
 
 def _make_session_cm(response: AsyncMock):
@@ -101,9 +110,7 @@ async def test_ask_ai_with_tools_returns_text(monkeypatch):
     assert result.tool_arguments == {}
 
 
-async def test_ask_ai_with_tools_parses_tool_call(monkeypatch):
-    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
-
+def _tool_call_response(name: str, arguments: str, call_id: str = "call_1") -> AsyncMock:
     response = AsyncMock()
     response.status = 200
     response.json = AsyncMock(
@@ -111,19 +118,34 @@ async def test_ask_ai_with_tools_parses_tool_call(monkeypatch):
             "choices": [
                 {
                     "message": {
+                        "role": "assistant",
                         "content": None,
                         "tool_calls": [
                             {
-                                "function": {
-                                    "name": "add_trigger_word",
-                                    "arguments": '{"word": "спам"}',
-                                }
+                                "id": call_id,
+                                "function": {"name": name, "arguments": arguments},
                             }
                         ],
                     }
                 }
             ]
         }
+    )
+    return response
+
+
+def _text_response(content: str) -> AsyncMock:
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"choices": [{"message": {"content": content}}]})
+    return response
+
+
+async def test_ask_ai_with_tools_parses_call_tool(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = _tool_call_response(
+        CALL_TOOL, '{"name": "add_trigger_word", "arguments": {"word": "спам"}}'
     )
 
     with patch(
@@ -140,21 +162,7 @@ async def test_ask_ai_with_tools_parses_tool_call(monkeypatch):
 async def test_ask_ai_with_tools_handles_bad_arguments_json(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
 
-    response = AsyncMock()
-    response.status = 200
-    response.json = AsyncMock(
-        return_value={
-            "choices": [
-                {
-                    "message": {
-                        "tool_calls": [
-                            {"function": {"name": "reset_punishment_messages", "arguments": ""}}
-                        ]
-                    }
-                }
-            ]
-        }
-    )
+    response = _tool_call_response(CALL_TOOL, "")
 
     with patch(
         "ai.openrouter_client.aiohttp.ClientSession",
@@ -162,7 +170,7 @@ async def test_ask_ai_with_tools_handles_bad_arguments_json(monkeypatch):
     ):
         result = await ask_ai_with_tools("сбрось тексты", tools=[])
 
-    assert result.tool_name == "reset_punishment_messages"
+    assert result.tool_name is None
     assert result.tool_arguments == {}
 
 
@@ -180,12 +188,10 @@ async def test_ask_ai_with_tools_raises_on_non_200(monkeypatch):
             await ask_ai_with_tools("Привет", tools=[])
 
 
-async def test_ask_ai_with_tools_sends_tools_in_payload(monkeypatch):
+async def test_ask_ai_with_tools_sends_only_meta_tools_in_payload(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
 
-    response = AsyncMock()
-    response.status = 200
-    response.json = AsyncMock(return_value={"choices": [{"message": {"content": "ok"}}]})
+    response = _text_response("ok")
 
     post_cm = AsyncMock()
     post_cm.__aenter__ = AsyncMock(return_value=response)
@@ -196,10 +202,117 @@ async def test_ask_ai_with_tools_sends_tools_in_payload(monkeypatch):
     session_cm.__aenter__ = AsyncMock(return_value=session)
     session_cm.__aexit__ = AsyncMock(return_value=None)
 
-    tools = [{"type": "function", "function": {"name": "x"}}]
+    real_tools = [{"type": "function", "function": {"name": "x"}}]
     with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
-        await ask_ai_with_tools("q", tools)
+        await ask_ai_with_tools("q", real_tools)
 
     payload = session.post.call_args.kwargs["json"]
-    assert payload["tools"] == tools
+    assert payload["tools"] == META_TOOLS
     assert payload["tool_choice"] == "auto"
+
+
+async def test_ask_ai_with_tools_reads_reference_then_calls_tool(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    real_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "mute_user",
+                "description": "Замьютить пользователя.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"minutes": {"type": "integer", "description": "Минуты."}},
+                    "required": ["minutes"],
+                },
+            },
+        }
+    ]
+
+    responses = [
+        _tool_call_response(READ_TOOLS_REFERENCE, "{}"),
+        _tool_call_response(CALL_TOOL, '{"name": "mute_user", "arguments": {"minutes": 10}}'),
+    ]
+
+    session = MagicMock()
+    post_cms = []
+    for resp in responses:
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=None)
+        post_cms.append(cm)
+    session.post = MagicMock(side_effect=post_cms)
+
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        result = await ask_ai_with_tools("замьють спамера", real_tools)
+
+    assert result.tool_name == "mute_user"
+    assert result.tool_arguments == {"minutes": 10}
+    assert session.post.call_count == 2
+
+    second_call_payload = session.post.call_args_list[1].kwargs["json"]
+    tool_messages = [m for m in second_call_payload["messages"] if m.get("role") == "tool"]
+    assert len(tool_messages) == 1
+    assert "mute_user" in tool_messages[0]["content"]
+
+
+async def test_ask_ai_with_tools_raises_after_max_rounds(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    responses = [_tool_call_response(READ_TOOLS_REFERENCE, "{}") for _ in range(3)]
+    session = MagicMock()
+    post_cms = []
+    for resp in responses:
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=None)
+        post_cms.append(cm)
+    session.post = MagicMock(side_effect=post_cms)
+
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        with pytest.raises(AIUnavailableError):
+            await ask_ai_with_tools("что ты умеешь?", tools=[])
+
+
+def test_build_tools_reference_lists_name_description_and_args():
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "mute_user",
+                "description": "Замьютить пользователя.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"minutes": {"type": "integer", "description": "Минуты."}},
+                    "required": ["minutes"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_trigger_words",
+                "description": "Показать триггер-слова.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+    ]
+
+    reference = build_tools_reference(tools)
+
+    assert "mute_user: Замьютить пользователя." in reference
+    assert "minutes (integer) (обязательный): Минуты." in reference
+    assert "list_trigger_words: Показать триггер-слова." in reference
+    assert "без аргументов" in reference
+
+
+def test_build_tools_reference_empty_list():
+    assert build_tools_reference([]) == "Нет доступных команд."

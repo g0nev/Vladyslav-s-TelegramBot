@@ -98,7 +98,7 @@ async def cmd_ask(
         return
 
     if response.tool_name is None:
-        await message.answer(response.text or UNAVAILABLE_MESSAGE)
+        await message.answer(response.text or UNAVAILABLE_MESSAGE, parse_mode="Markdown")
         return
 
     tool_name = response.tool_name

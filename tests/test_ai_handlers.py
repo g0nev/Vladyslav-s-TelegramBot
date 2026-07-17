@@ -115,7 +115,7 @@ async def test_text_response_is_forwarded(repo):
     with patch("ai.handlers.is_admin", AsyncMock(return_value=False)):
         with patch("ai.handlers.ask_ai_with_tools", AsyncMock(return_value=AIResponse(text="42"))):
             await cmd_ask(message, cmd("смысл жизни"), AsyncMock(), repo, MagicMock())
-    message.answer.assert_awaited_once_with("42")
+    message.answer.assert_awaited_once_with("42", parse_mode="Markdown")
 
 
 async def test_ai_unavailable_reports(repo):
