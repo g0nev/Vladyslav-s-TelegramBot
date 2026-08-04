@@ -5,7 +5,7 @@ import pytest
 from aiogram.filters import CommandObject
 
 import ai.handlers as handlers
-from ai.handlers import cmd_ask, on_ai_confirm
+from ai.handlers import _wrap_tool_names, cmd_ask, on_ai_confirm
 from ai.openrouter_client import AIResponse
 from ai.tools import ADMIN_TOOLS, PUBLIC_TOOLS
 from db.repository import Repository
@@ -306,3 +306,23 @@ async def test_expired_pending_action_reports_expired_and_is_purged(repo):
     assert callback.answer.await_args.kwargs.get("show_alert") is True
     assert token not in handlers._pending_actions
     bot.restrict_chat_member.assert_not_awaited()
+
+
+def test_wrap_tool_names_wraps_bare_name():
+    assert _wrap_tool_names("вызовем list_trigger_words") == "вызовем `list_trigger_words`"
+
+
+def test_wrap_tool_names_does_not_double_wrap_already_backticked_name():
+    text = "используй `add_trigger_word` для этого"
+    assert _wrap_tool_names(text) == text
+
+
+def test_wrap_tool_names_leaves_unrelated_text_untouched():
+    text = "привет, как дела?"
+    assert _wrap_tool_names(text) == text
+
+
+def test_wrap_tool_names_wraps_multiple_names_in_one_text():
+    text = "команды: list_trigger_words и delete_trigger_word"
+    expected = "команды: `list_trigger_words` и `delete_trigger_word`"
+    assert _wrap_tool_names(text) == expected

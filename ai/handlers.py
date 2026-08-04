@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -41,6 +42,16 @@ NOT_YOUR_DECISION_MESSAGE = "Это решение может подтверди
 EXPIRED_MESSAGE = "Это подтверждение больше не действительно."
 NO_RIGHTS_MESSAGE = "Не удалось: боту не хватает прав."
 CANCELLED_MESSAGE = "Действие отменено."
+
+_TOOL_NAME_PATTERN = re.compile(
+    r"(?<!`)\b("
+    + "|".join(re.escape(name) for name in sorted(ADMIN_TOOL_NAMES, key=len, reverse=True))
+    + r")\b(?!`)"
+)
+
+
+def _wrap_tool_names(text: str) -> str:
+    return _TOOL_NAME_PATTERN.sub(r"`\1`", text)
 
 
 PENDING_ACTION_TTL = timedelta(minutes=10)
