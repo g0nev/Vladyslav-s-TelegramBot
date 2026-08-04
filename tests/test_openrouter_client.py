@@ -426,9 +426,20 @@ async def test_build_general_info_includes_developer_and_chat_settings():
     assert "Тише!" in info
     assert "стандартный" in info
     assert "5 мин." in info
+    assert "не задан (обычный стиль)" in info
     repository.get_chat_settings.assert_awaited_once_with(42)
     repository.get_message_templates.assert_awaited_once_with(42)
     repository.get_escalation_settings.assert_awaited_once_with(42)
+    repository.get_persona.assert_awaited_once_with(42)
+
+
+async def test_build_general_info_includes_persona_when_set():
+    repository = _fake_repository(persona="Отвечай дерзко и с юмором.")
+
+    info = await build_general_info(chat_id=1, repository=repository)
+
+    assert "Отвечай дерзко и с юмором." in info
+    assert "не задан (обычный стиль)" not in info
 
 
 async def test_build_general_info_reflects_custom_escalation_settings():

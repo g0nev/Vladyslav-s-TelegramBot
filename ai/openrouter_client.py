@@ -140,6 +140,7 @@ async def build_general_info(chat_id: int, repository: Repository) -> str:
     broadcast_interval, reset_days = await repository.get_chat_settings(chat_id)
     warn_message, mute_message, kick_message = await repository.get_message_templates(chat_id)
     mute_minutes, kick_after = await repository.get_escalation_settings(chat_id)
+    persona = await repository.get_persona(chat_id)
 
     def _template(text: Optional[str]) -> str:
         return text if text else "не задан (используется стандартный)"
@@ -166,7 +167,8 @@ async def build_general_info(chat_id: int, repository: Repository) -> str:
         f"    • интервал автоматической рассылки: {broadcast_interval} мин. (0 = выключено)\n"
         f"    • текст предупреждения: {_template(warn_message)}\n"
         f"    • текст мьюта: {_template(mute_message)}\n"
-        f"    • текст кика: {_template(kick_message)}"
+        f"    • текст кика: {_template(kick_message)}\n"
+        f"    • характер/стиль общения: {persona if persona else 'не задан (обычный стиль)'}"
     )
 
 
