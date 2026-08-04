@@ -138,8 +138,8 @@ async def test_text_response_falls_back_to_plain_on_bad_markdown(repo):
             await cmd_ask(message, cmd("что умеешь"), AsyncMock(), repo, MagicMock())
 
     assert message.answer.await_count == 2
-    message.answer.assert_any_await("list_trigger_words *broken", parse_mode="Markdown")
-    message.answer.assert_any_await("list_trigger_words *broken", parse_mode=None)
+    message.answer.assert_any_await("`list_trigger_words` *broken", parse_mode="Markdown")
+    message.answer.assert_any_await("`list_trigger_words` *broken", parse_mode=None)
 
 
 async def test_ai_unavailable_reports(repo):
@@ -326,3 +326,13 @@ def test_wrap_tool_names_wraps_multiple_names_in_one_text():
     text = "команды: list_trigger_words и delete_trigger_word"
     expected = "команды: `list_trigger_words` и `delete_trigger_word`"
     assert _wrap_tool_names(text) == expected
+
+
+async def test_text_response_wraps_tool_names_in_backticks(repo):
+    message = make_message()
+    response = AIResponse(text="используй list_trigger_words чтобы посмотреть список")
+    with patch("ai.handlers.is_admin", AsyncMock(return_value=False)):
+        with patch("ai.handlers.ask_ai_with_tools", AsyncMock(return_value=response)):
+            await cmd_ask(message, cmd("привет"), AsyncMock(), repo, MagicMock())
+    sent_text = message.answer.await_args.args[0]
+    assert "`list_trigger_words`" in sent_text

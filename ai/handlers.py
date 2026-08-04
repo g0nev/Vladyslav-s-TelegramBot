@@ -130,7 +130,7 @@ async def cmd_ask(
         return
 
     if response.tool_name is None:
-        text = response.text or UNAVAILABLE_MESSAGE
+        text = _wrap_tool_names(response.text or UNAVAILABLE_MESSAGE)
         try:
             await message.answer(text, parse_mode="Markdown")
         except TelegramBadRequest:
