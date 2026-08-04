@@ -16,6 +16,7 @@ _MIGRATION_COLUMNS = {
     "last_invite_link": "TEXT",
     "mute_minutes": "INTEGER NOT NULL DEFAULT 5",
     "kick_after_violation": "INTEGER NOT NULL DEFAULT 3",
+    "persona": "TEXT",
 }
 
 
@@ -251,5 +252,20 @@ class Repository:
         await self._conn.execute(
             "UPDATE chat_settings SET kick_after_violation = ? WHERE chat_id = ?",
             (violations, chat_id),
+        )
+        await self._conn.commit()
+
+    async def get_persona(self, chat_id: int) -> Optional[str]:
+        await self.get_chat_settings(chat_id)
+        cursor = await self._conn.execute(
+            "SELECT persona FROM chat_settings WHERE chat_id = ?", (chat_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0]
+
+    async def set_persona(self, chat_id: int, text: Optional[str]) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET persona = ? WHERE chat_id = ?", (text, chat_id)
         )
         await self._conn.commit()

@@ -115,6 +115,7 @@ async def test_migration_adds_columns_to_preexisting_db(tmp_path):
     assert interval == 10
     mute_minutes, kick_after = await reopened_repo.get_escalation_settings(chat_id=1)
     assert (mute_minutes, kick_after) == (5, 3)
+    assert await reopened_repo.get_persona(chat_id=1) is None
     await reopened_repo.close()
 
 
@@ -153,3 +154,18 @@ async def test_set_kick_after(repo):
     await repo.set_kick_after(chat_id=1, violations=5)
     _, kick_after = await repo.get_escalation_settings(chat_id=1)
     assert kick_after == 5
+
+
+async def test_persona_defaults_to_none(repo):
+    assert await repo.get_persona(chat_id=1) is None
+
+
+async def test_persona_set_and_get(repo):
+    await repo.set_persona(chat_id=1, text="Отвечай дерзко и с юмором.")
+    assert await repo.get_persona(chat_id=1) == "Отвечай дерзко и с юмором."
+
+
+async def test_persona_cleared_with_none(repo):
+    await repo.set_persona(chat_id=1, text="Дерзко")
+    await repo.set_persona(chat_id=1, text=None)
+    assert await repo.get_persona(chat_id=1) is None
