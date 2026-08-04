@@ -345,7 +345,7 @@ async def generate_violation_reaction(
                 if response.status != 200:
                     return None
                 data = await response.json()
-    except (aiohttp.ClientError, TimeoutError):
+    except (aiohttp.ClientError, TimeoutError, ValueError):
         return None
 
     try:

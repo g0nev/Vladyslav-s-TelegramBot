@@ -1,3 +1,4 @@
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
@@ -585,6 +586,24 @@ async def test_generate_violation_reaction_returns_none_on_malformed_response(mo
     response = AsyncMock()
     response.status = 200
     response.json = AsyncMock(return_value={"unexpected": "shape"})
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_violation_reaction("Дерзкий стиль", "warn", mute_minutes=5)
+
+    assert result is None
+
+
+async def test_generate_violation_reaction_returns_none_on_json_decode_error(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(
+        side_effect=json.JSONDecodeError("Expecting value", "", 0)
+    )
 
     with patch(
         "ai.openrouter_client.aiohttp.ClientSession",
