@@ -512,7 +512,12 @@ def test_system_prompt_forbids_placeholder_words():
 
 def test_system_prompt_forbids_tool_calls_on_plain_greeting():
     assert "приветствие" in SYSTEM_PROMPT
-    assert "не вызывай инструменты" in SYSTEM_PROMPT
+    assert "не вызывай ни один инструмент" in SYSTEM_PROMPT
+
+
+def test_system_prompt_treats_discussion_as_text_not_tool_call():
+    assert "рассужда" in SYSTEM_PROMPT.lower()
+    assert "не вызывай ни один инструмент" in SYSTEM_PROMPT
 
 
 async def test_generate_violation_reaction_returns_text_on_success(monkeypatch):
