@@ -510,6 +510,11 @@ def test_system_prompt_forbids_placeholder_words():
     assert "плейсхолд" in SYSTEM_PROMPT.lower()
 
 
+def test_system_prompt_forbids_tool_calls_on_plain_greeting():
+    assert "приветствие" in SYSTEM_PROMPT
+    assert "не вызывай инструменты" in SYSTEM_PROMPT
+
+
 async def test_generate_violation_reaction_returns_text_on_success(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
 
