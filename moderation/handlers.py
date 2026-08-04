@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import html
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import ChatPermissions, Message
 
 from admin.permissions import is_admin
+from ai.openrouter_client import generate_violation_reaction
 from db.repository import Repository
 from moderation.logic import (
     compute_violation,
@@ -104,16 +106,24 @@ async def handle_moderated_message(
         message.chat.id, message.from_user.id, new_count, now.isoformat()
     )
 
-    warn_message, mute_message, kick_message = await repository.get_message_templates(
-        message.chat.id
-    )
-    custom_template = {"warn": warn_message, "mute": mute_message, "kick": kick_message}[
-        punishment
-    ]
-    template = custom_template if custom_template else WARN_TEMPLATES[punishment]
-    text = format_punishment_message(
-        html.escape(template, quote=False), mention=_mention(message), minutes=mute_minutes
-    )
+    persona = await repository.get_persona(message.chat.id)
+    reaction_text: Optional[str] = None
+    if persona:
+        reaction_text = await generate_violation_reaction(persona, punishment, mute_minutes)
+
+    if reaction_text:
+        text = f"{_mention(message)}, {html.escape(reaction_text)}"
+    else:
+        warn_message, mute_message, kick_message = await repository.get_message_templates(
+            message.chat.id
+        )
+        custom_template = {"warn": warn_message, "mute": mute_message, "kick": kick_message}[
+            punishment
+        ]
+        template = custom_template if custom_template else WARN_TEMPLATES[punishment]
+        text = format_punishment_message(
+            html.escape(template, quote=False), mention=_mention(message), minutes=mute_minutes
+        )
     await message.answer(text)
 
 

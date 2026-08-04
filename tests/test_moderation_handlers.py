@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from aiogram.exceptions import TelegramAPIError
@@ -223,3 +223,61 @@ async def test_missing_permissions_on_kick_does_not_reset_count(repo):
 
     count, _ = await repo.get_warning(chat_id=1, user_id=100)
     assert count == 2
+
+
+async def test_reaction_uses_ai_when_persona_set(repo):
+    bot = await make_bot()
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    message = make_message("спам")
+
+    with patch(
+        "moderation.handlers.generate_violation_reaction",
+        AsyncMock(return_value="Так, полегче там!"),
+    ) as mock_generate:
+        await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    mock_generate.assert_awaited_once_with("Дерзкий стиль", "warn", 5)
+    message.answer.assert_awaited_once_with("User100, Так, полегче там!")
+
+
+async def test_reaction_falls_back_to_template_when_ai_returns_none(repo):
+    bot = await make_bot()
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    message = make_message("спам")
+
+    with patch(
+        "moderation.handlers.generate_violation_reaction",
+        AsyncMock(return_value=None),
+    ):
+        await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    sent_text = message.answer.await_args.args[0]
+    assert sent_text.startswith("User100, предупреждение")
+
+
+async def test_reaction_escapes_html_from_ai_response(repo):
+    bot = await make_bot()
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    message = make_message("спам")
+
+    with patch(
+        "moderation.handlers.generate_violation_reaction",
+        AsyncMock(return_value="<b>совсем оборзел</b>"),
+    ):
+        await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    message.answer.assert_awaited_once_with("User100, &lt;b&gt;совсем оборзел&lt;/b&gt;")
+
+
+async def test_ai_not_called_when_no_persona_set(repo):
+    bot = await make_bot()
+    message = make_message("спам")
+
+    with patch(
+        "moderation.handlers.generate_violation_reaction", AsyncMock()
+    ) as mock_generate:
+        await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    mock_generate.assert_not_called()
+    sent_text = message.answer.await_args.args[0]
+    assert sent_text.startswith("User100, предупреждение")
