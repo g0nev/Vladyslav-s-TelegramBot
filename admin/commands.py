@@ -236,3 +236,21 @@ async def cmd_resetmsgs(message: Message, bot: Bot, repository: Repository) -> N
         return
     await repository.reset_message_templates(message.chat.id)
     await message.answer("Тексты наказаний сброшены к значениям по умолчанию.")
+
+
+@router.message(Command("setpersona"))
+async def cmd_setpersona(
+    message: Message, command: CommandObject, bot: Bot, repository: Repository
+) -> None:
+    if not await _require_admin(message, bot):
+        return
+    text = command.args.strip() if command.args else ""
+    if not text:
+        await repository.set_persona(message.chat.id, None)
+        await message.answer("Инструкция поведения сброшена, бот вернулся к обычному стилю.")
+        return
+    if len(text) > 500:
+        await message.answer("Слишком длинно — уложись в 500 символов.")
+        return
+    await repository.set_persona(message.chat.id, text)
+    await message.answer("Инструкция поведения сохранена.")

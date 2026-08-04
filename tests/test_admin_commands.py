@@ -357,3 +357,58 @@ async def test_resetmsgs_clears_all_templates(repo):
     await commands.cmd_resetmsgs(message, bot, repo)
 
     assert await repo.get_message_templates(1) == (None, None, None)
+
+
+async def test_setpersona_requires_admin(repo):
+    bot = await make_bot(is_admin_user_id=999)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setpersona(message, cmd("Дерзкий стиль"), bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Эта команда доступна только администраторам чата."
+    )
+    assert await repo.get_persona(1) is None
+
+
+async def test_setpersona_sets_text(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setpersona(message, cmd("Отвечай дерзко и с юмором."), bot, repo)
+
+    assert await repo.get_persona(1) == "Отвечай дерзко и с юмором."
+    message.answer.assert_awaited_once_with("Инструкция поведения сохранена.")
+
+
+async def test_setpersona_without_args_clears(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    await repo.set_persona(1, "старый стиль")
+    message = make_message(user_id=1)
+
+    await commands.cmd_setpersona(message, cmd(None), bot, repo)
+
+    assert await repo.get_persona(1) is None
+    message.answer.assert_awaited_once_with(
+        "Инструкция поведения сброшена, бот вернулся к обычному стилю."
+    )
+
+
+async def test_setpersona_whitespace_only_clears(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    await repo.set_persona(1, "старый стиль")
+    message = make_message(user_id=1)
+
+    await commands.cmd_setpersona(message, cmd("   "), bot, repo)
+
+    assert await repo.get_persona(1) is None
+
+
+async def test_setpersona_rejects_too_long(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setpersona(message, cmd("а" * 501), bot, repo)
+
+    message.answer.assert_awaited_once_with("Слишком длинно — уложись в 500 символов.")
+    assert await repo.get_persona(1) is None
