@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 
 import config
@@ -15,6 +16,7 @@ from ai.openrouter_client import (
     ask_ai_with_tools,
     build_general_info,
     build_tools_reference,
+    generate_violation_reaction,
 )
 
 
@@ -494,3 +496,125 @@ def test_system_prompt_requires_executing_available_tool_instead_of_describing_i
 
 def test_system_prompt_forbids_placeholder_words():
     assert "плейсхолд" in SYSTEM_PROMPT.lower()
+
+
+async def test_generate_violation_reaction_returns_text_on_success(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(
+        return_value={"choices": [{"message": {"content": "  Так, полегче там!  "}}]}
+    )
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_violation_reaction("Дерзкий стиль", "warn", mute_minutes=5)
+
+    assert result == "Так, полегче там!"
+
+
+async def test_generate_violation_reaction_returns_none_when_key_missing(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
+
+    result = await generate_violation_reaction("Дерзкий стиль", "warn", mute_minutes=5)
+
+    assert result is None
+
+
+async def test_generate_violation_reaction_returns_none_on_non_200(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 500
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_violation_reaction("Дерзкий стиль", "kick", mute_minutes=5)
+
+    assert result is None
+
+
+async def test_generate_violation_reaction_returns_none_on_client_error(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(side_effect=aiohttp.ClientConnectionError("boom"))
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        result = await generate_violation_reaction("Дерзкий стиль", "mute", mute_minutes=10)
+
+    assert result is None
+
+
+async def test_generate_violation_reaction_returns_none_on_timeout(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(side_effect=TimeoutError())
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        result = await generate_violation_reaction("Дерзкий стиль", "mute", mute_minutes=10)
+
+    assert result is None
+
+
+async def test_generate_violation_reaction_returns_none_on_empty_content(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"choices": [{"message": {"content": "   "}}]})
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_violation_reaction("Дерзкий стиль", "warn", mute_minutes=5)
+
+    assert result is None
+
+
+async def test_generate_violation_reaction_returns_none_on_malformed_response(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"unexpected": "shape"})
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_violation_reaction("Дерзкий стиль", "warn", mute_minutes=5)
+
+    assert result is None
+
+
+async def test_generate_violation_reaction_includes_persona_and_punishment_in_prompt(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"choices": [{"message": {"content": "Ок"}}]})
+
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await generate_violation_reaction("Дерзкий стиль и юмор", "mute", mute_minutes=15)
+
+    payload = session.post.call_args.kwargs["json"]
+    prompt = payload["messages"][0]["content"]
+    assert "Дерзкий стиль и юмор" in prompt
+    assert "15 минут" in prompt

@@ -298,3 +298,59 @@ async def ask_ai_with_tools(
         raise AIUnavailableError(str(exc)) from exc
 
     raise AIUnavailableError("Tool resolution exceeded max rounds")
+
+
+_REACTION_TIMEOUT = aiohttp.ClientTimeout(total=10)
+
+_PUNISHMENT_OUTCOMES = {
+    "warn": "получил предупреждение",
+    "mute": "получил ограничение на отправку сообщений на {minutes} минут",
+    "kick": "был удалён из чата",
+}
+
+
+async def generate_violation_reaction(
+    persona: str, punishment: str, mute_minutes: int
+) -> Optional[str]:
+    """Single non-tool completion call for a moderation reaction line.
+
+    Swallows every failure mode (missing key, non-200, network error,
+    timeout, malformed/empty response) into None so the caller can fall
+    back to the static punishment template without a try/except.
+    """
+    if not config.OPENROUTER_API_KEY:
+        return None
+
+    outcome = _PUNISHMENT_OUTCOMES[punishment].format(minutes=mute_minutes)
+    task_prompt = (
+        f"Характер бота в этом чате: {persona}\n"
+        f"Пользователь нарушил правила чата и {outcome} за мат/оскорбления. "
+        "Напиши одну короткую (1-2 предложения) реакцию в чат в этом стиле. "
+        "Не обращайся к пользователю по имени и не добавляй никаких упоминаний — "
+        "обращение бот добавит сам."
+    )
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                OPENROUTER_URL,
+                headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"},
+                json={
+                    "model": config.OPENROUTER_MODEL,
+                    "messages": [{"role": "user", "content": task_prompt}],
+                    "max_tokens": config.OPENROUTER_MAX_TOKENS,
+                },
+                timeout=_REACTION_TIMEOUT,
+            ) as response:
+                if response.status != 200:
+                    return None
+                data = await response.json()
+    except (aiohttp.ClientError, TimeoutError):
+        return None
+
+    try:
+        text = data["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return None
+
+    return text or None
