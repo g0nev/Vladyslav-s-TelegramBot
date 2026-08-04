@@ -138,10 +138,54 @@ async def test_add_trigger_word_rejects_crammed_single_string(repo):
     assert await repo.list_trigger_words(1) == []
 
 
-async def test_delete_trigger_word_found_and_missing(repo):
+async def test_delete_trigger_word(repo):
     await repo.add_trigger_word(1, "спам")
-    assert "удалено" in await execute_tool("delete_trigger_word", {"word": "спам"}, **_ctx(repo))
-    assert "не найдено" in await execute_tool("delete_trigger_word", {"word": "спам"}, **_ctx(repo))
+    result = await execute_tool("delete_trigger_word", {"words": ["спам"]}, **_ctx(repo))
+    assert "удалено" in result
+    assert await repo.list_trigger_words(1) == []
+
+
+async def test_delete_trigger_word_reports_missing(repo):
+    result = await execute_tool("delete_trigger_word", {"words": ["спам"]}, **_ctx(repo))
+    assert "не найдено" in result
+
+
+async def test_delete_trigger_word_deletes_several_words_in_one_call(repo):
+    await repo.add_trigger_word(1, "спам")
+    await repo.add_trigger_word(1, "реклама")
+    await repo.add_trigger_word(1, "казино")
+    result = await execute_tool(
+        "delete_trigger_word", {"words": ["спам", "реклама", "казино"]}, **_ctx(repo)
+    )
+    assert await repo.list_trigger_words(1) == []
+    assert "спам" in result and "реклама" in result and "казино" in result
+
+
+async def test_delete_trigger_word_reports_found_and_missing_together(repo):
+    await repo.add_trigger_word(1, "спам")
+    result = await execute_tool(
+        "delete_trigger_word", {"words": ["спам", "несуществующее"]}, **_ctx(repo)
+    )
+    assert "спам" in result and "удалено" in result
+    assert "несуществующее" in result and "не найдено" in result
+    assert await repo.list_trigger_words(1) == []
+
+
+async def test_delete_trigger_word_rejects_empty(repo):
+    result = await execute_tool("delete_trigger_word", {"words": ["   "]}, **_ctx(repo))
+    assert result == "Нужно указать хотя бы одно непустое слово."
+
+
+async def test_delete_trigger_word_rejects_missing_words_key(repo):
+    result = await execute_tool("delete_trigger_word", {}, **_ctx(repo))
+    assert result == "Нужно указать хотя бы одно непустое слово."
+
+
+async def test_delete_trigger_word_rejects_crammed_single_string(repo):
+    result = await execute_tool(
+        "delete_trigger_word", {"words": ["спам, реклама, казино"]}, **_ctx(repo)
+    )
+    assert "отдельным элементом" in result
 
 
 async def test_reset_user_warnings(repo):

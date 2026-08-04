@@ -56,11 +56,18 @@ ADMIN_ONLY_TOOLS: list[dict] = [
     ),
     _tool(
         "delete_trigger_word",
-        "Удалить слово из добавленных вручную триггеров.",
+        "Удалить одно или несколько слов из добавленных вручную триггеров. Каждое "
+        "слово — отдельный элемент массива words.",
         {
             "type": "object",
-            "properties": {"word": {"type": "string", "description": "Слово-триггер."}},
-            "required": ["word"],
+            "properties": {
+                "words": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Список слов-триггеров на удаление, каждое отдельным элементом.",
+                }
+            },
+            "required": ["words"],
         },
     ),
     _tool(
@@ -272,13 +279,40 @@ async def execute_tool(
         return f"Слова {escaped_words} добавлены в список триггеров."
 
     if tool_name == "delete_trigger_word":
-        word = str(arguments.get("word", "")).strip()
-        if not word:
-            return "Нужно указать непустое слово."
-        deleted = await repository.delete_trigger_word(chat_id, word)
-        if deleted:
-            return f"Слово «{html.escape(word)}» удалено из списка триггеров."
-        return f"Слово «{html.escape(word)}» не найдено в добавленных вручную."
+        raw_words = arguments.get("words")
+        if not isinstance(raw_words, list):
+            raw_words = [raw_words] if raw_words is not None else []
+        words = [str(w).strip() for w in raw_words if str(w).strip()]
+        if not words:
+            return "Нужно указать хотя бы одно непустое слово."
+
+        crammed = [w for w in words if "," in w or "\n" in w]
+        if crammed:
+            return (
+                "Каждое слово нужно передавать отдельным элементом списка words, "
+                "без запятых и переносов строк внутри одного слова."
+            )
+
+        deleted_words = []
+        missing_words = []
+        for word in words:
+            if await repository.delete_trigger_word(chat_id, word):
+                deleted_words.append(word)
+            else:
+                missing_words.append(word)
+
+        parts = []
+        if deleted_words:
+            escaped = ", ".join(f"«{html.escape(w)}»" for w in deleted_words)
+            noun = "Слово" if len(deleted_words) == 1 else "Слова"
+            verb = "удалено" if len(deleted_words) == 1 else "удалены"
+            parts.append(f"{noun} {escaped} {verb} из списка триггеров.")
+        if missing_words:
+            escaped = ", ".join(f"«{html.escape(w)}»" for w in missing_words)
+            noun = "Слово" if len(missing_words) == 1 else "Слова"
+            verb = "не найдено" if len(missing_words) == 1 else "не найдены"
+            parts.append(f"{noun} {escaped} {verb} в добавленных вручную.")
+        return " ".join(parts)
 
     if tool_name == "reset_user_warnings":
         await repository.reset_warning(chat_id, target_id)
