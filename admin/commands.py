@@ -8,6 +8,8 @@ from aiogram.types import Message
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from admin.permissions import require_admin as _require_admin
+from ai.content_filter import check_hard_block
+from ai.handlers import BLOCK_MESSAGE
 from db.repository import Repository
 from scheduler.broadcaster import schedule_chat_broadcast
 
@@ -248,6 +250,9 @@ async def cmd_setpersona(
     if not text:
         await repository.set_persona(message.chat.id, None)
         await message.answer("Инструкция поведения сброшена, бот вернулся к обычному стилю.")
+        return
+    if check_hard_block(text):
+        await message.answer(BLOCK_MESSAGE)
         return
     if len(text) > 500:
         await message.answer("Слишком длинно — уложись в 500 символов.")
