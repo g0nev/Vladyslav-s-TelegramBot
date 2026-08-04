@@ -221,8 +221,16 @@ async def ask_ai_with_tools(
     if not config.OPENROUTER_API_KEY:
         raise AIUnavailableError("OPENROUTER_API_KEY is not configured")
 
+    persona = await repository.get_persona(chat_id)
+    system_content = SYSTEM_PROMPT
+    if persona:
+        system_content += (
+            "\n\nДополнительно, стиль и характер общения в этом чате задал админ: "
+            + persona
+        )
+
     messages: list[dict] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_content},
         {"role": "user", "content": question},
     ]
 

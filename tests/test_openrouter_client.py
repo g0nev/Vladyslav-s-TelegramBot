@@ -23,11 +23,13 @@ def _fake_repository(
     reset_days=0,
     templates=(None, None, None),
     escalation=(5, 3),
+    persona=None,
 ):
     repository = MagicMock()
     repository.get_chat_settings = AsyncMock(return_value=(broadcast_interval, reset_days))
     repository.get_message_templates = AsyncMock(return_value=templates)
     repository.get_escalation_settings = AsyncMock(return_value=escalation)
+    repository.get_persona = AsyncMock(return_value=persona)
     return repository
 
 
@@ -237,6 +239,58 @@ async def test_ask_ai_with_tools_sends_only_meta_tools_in_payload(monkeypatch):
     payload = session.post.call_args.kwargs["json"]
     assert payload["tools"] == META_TOOLS
     assert payload["tool_choice"] == "auto"
+
+
+async def test_ask_ai_with_tools_appends_persona_to_system_prompt(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = _text_response("ok")
+
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await ask_ai_with_tools(
+            "Привет",
+            tools=[],
+            repository=_fake_repository(persona="Отвечай дерзко и с юмором."),
+            chat_id=1,
+        )
+
+    payload = session.post.call_args.kwargs["json"]
+    system_message = payload["messages"][0]
+    assert system_message["role"] == "system"
+    assert SYSTEM_PROMPT in system_message["content"]
+    assert "Отвечай дерзко и с юмором." in system_message["content"]
+
+
+async def test_ask_ai_with_tools_omits_persona_block_when_not_set(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = _text_response("ok")
+
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await ask_ai_with_tools(
+            "Привет", tools=[], repository=_fake_repository(persona=None), chat_id=1
+        )
+
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["messages"][0]["content"] == SYSTEM_PROMPT
 
 
 async def test_ask_ai_with_tools_reads_reference_then_calls_tool(monkeypatch):
