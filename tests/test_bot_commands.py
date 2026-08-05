@@ -36,6 +36,8 @@ def test_bot_commands_cover_all_commands():
         "settitle",
         "setdescription",
         "setphoto",
+        "setproactive",
+        "setproactivecontext",
     }
 
 

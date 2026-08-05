@@ -12,6 +12,7 @@ from ai.content_filter import check_hard_block
 from ai.handlers import BLOCK_MESSAGE
 from db.repository import Repository
 from scheduler.broadcaster import schedule_chat_broadcast
+from scheduler.proactive import schedule_chat_proactive
 
 router = Router(name="admin")
 
@@ -259,3 +260,80 @@ async def cmd_setpersona(
         return
     await repository.set_persona(message.chat.id, text)
     await message.answer("Инструкция поведения сохранена.")
+
+
+_SETPROACTIVE_USAGE = (
+    "Использование:\n"
+    "/setproactive off — выключить\n"
+    "/setproactive interval «минуты» — раз в N минут, если было новое сообщение\n"
+    "/setproactive chance «процент 1-100» — шанс среагировать на каждое сообщение"
+)
+
+
+@router.message(Command("setproactive"))
+async def cmd_setproactive(
+    message: Message,
+    command: CommandObject,
+    bot: Bot,
+    repository: Repository,
+    scheduler: AsyncIOScheduler,
+) -> None:
+    if not await _require_admin(message, bot):
+        return
+
+    args = command.args.strip().split(maxsplit=1) if command.args else []
+    if not args:
+        await message.answer(_SETPROACTIVE_USAGE)
+        return
+
+    subcommand = args[0].lower()
+
+    if subcommand == "off":
+        await repository.set_proactive_off(message.chat.id)
+        schedule_chat_proactive(scheduler, bot, repository, message.chat.id, 0)
+        await message.answer("Проактивные сообщения выключены.")
+        return
+
+    if subcommand == "interval":
+        if len(args) < 2 or not args[1].strip().isdigit() or int(args[1].strip()) <= 0:
+            await message.answer(_SETPROACTIVE_USAGE)
+            return
+        minutes = int(args[1].strip())
+        await repository.set_proactive_interval(message.chat.id, minutes)
+        schedule_chat_proactive(scheduler, bot, repository, message.chat.id, minutes)
+        await message.answer(
+            f"Проактивный режим: раз в {minutes} мин. (если были новые сообщения)."
+        )
+        return
+
+    if subcommand == "chance":
+        if len(args) < 2 or not args[1].strip().isdigit():
+            await message.answer(_SETPROACTIVE_USAGE)
+            return
+        percent = int(args[1].strip())
+        if percent < 1 or percent > 100:
+            await message.answer(_SETPROACTIVE_USAGE)
+            return
+        await repository.set_proactive_probability(message.chat.id, percent / 100.0)
+        schedule_chat_proactive(scheduler, bot, repository, message.chat.id, 0)
+        await message.answer(f"Проактивный режим: {percent}% шанс среагировать на сообщение.")
+        return
+
+    await message.answer(_SETPROACTIVE_USAGE)
+
+
+@router.message(Command("setproactivecontext"))
+async def cmd_setproactivecontext(
+    message: Message, command: CommandObject, bot: Bot, repository: Repository
+) -> None:
+    if not await _require_admin(message, bot):
+        return
+    if not command.args or not command.args.strip().isdigit():
+        await message.answer("Использование: /setproactivecontext «число сообщений, 1-10»")
+        return
+    size = int(command.args.strip())
+    if size < 1 or size > 10:
+        await message.answer("Использование: /setproactivecontext «число сообщений, 1-10»")
+        return
+    await repository.set_proactive_context_size(message.chat.id, size)
+    await message.answer(f"Проактивный контекст: последние {size} сообщений.")

@@ -22,6 +22,14 @@ BOT_COMMANDS: list[BotCommand] = [
     BotCommand(command="setmuteminutes", description="Длительность мьюта в минутах (админ)"),
     BotCommand(command="setkickafter", description="Номер нарушения, после которого кик (админ, ≥2)"),
     BotCommand(command="setpersona", description="Задать характер/стиль поведения бота, без текста — сбросить (админ)"),
+    BotCommand(
+        command="setproactive",
+        description="Проактивные сообщения: off / interval «мин» / chance «%» (админ)",
+    ),
+    BotCommand(
+        command="setproactivecontext",
+        description="Сколько последних сообщений учитывать в проактивном ответе, 1-10 (админ)",
+    ),
     BotCommand(command="pin", description="Закрепить сообщение (админ, ответом на сообщение)"),
     BotCommand(command="unpin", description="Открепить сообщение (админ)"),
     BotCommand(command="lock", description="Заблокировать чат — писать могут только админы (админ)"),

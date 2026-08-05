@@ -424,3 +424,126 @@ async def test_setpersona_rejects_prompt_injection(repo):
 
     message.answer.assert_awaited_once_with("Не могу выполнить этот запрос.")
     assert await repo.get_persona(1) is None
+
+
+async def test_setproactive_requires_admin(repo, scheduler):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=2)
+
+    await commands.cmd_setproactive(message, cmd("interval 10"), bot, repo, scheduler)
+
+    mode, *_ = await repo.get_proactive_settings(1)
+    assert mode == "off"
+    assert scheduler.get_job("proactive_1") is None
+
+
+async def test_setproactive_interval_sets_mode_and_schedules_job(repo, scheduler):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setproactive(message, cmd("interval 10"), bot, repo, scheduler)
+
+    assert await repo.get_proactive_settings(1) == ("interval", 10, 0.0, 3)
+    assert scheduler.get_job("proactive_1") is not None
+
+
+async def test_setproactive_interval_rejects_zero(repo, scheduler):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setproactive(message, cmd("interval 0"), bot, repo, scheduler)
+
+    mode, *_ = await repo.get_proactive_settings(1)
+    assert mode == "off"
+
+
+async def test_setproactive_chance_sets_mode_and_probability(repo, scheduler):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setproactive(message, cmd("chance 5"), bot, repo, scheduler)
+
+    assert await repo.get_proactive_settings(1) == ("probability", 0, 0.05, 3)
+
+
+async def test_setproactive_chance_rejects_out_of_range(repo, scheduler):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setproactive(message, cmd("chance 150"), bot, repo, scheduler)
+
+    mode, *_ = await repo.get_proactive_settings(1)
+    assert mode == "off"
+
+
+async def test_setproactive_off_removes_scheduled_job(repo, scheduler):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+    await commands.cmd_setproactive(message, cmd("interval 10"), bot, repo, scheduler)
+
+    await commands.cmd_setproactive(message, cmd("off"), bot, repo, scheduler)
+
+    mode, *_ = await repo.get_proactive_settings(1)
+    assert mode == "off"
+    assert scheduler.get_job("proactive_1") is None
+
+
+async def test_setproactive_switching_from_interval_to_chance_removes_job(repo, scheduler):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+    await commands.cmd_setproactive(message, cmd("interval 10"), bot, repo, scheduler)
+
+    await commands.cmd_setproactive(message, cmd("chance 5"), bot, repo, scheduler)
+
+    assert await repo.get_proactive_settings(1) == ("probability", 0, 0.05, 3)
+    assert scheduler.get_job("proactive_1") is None
+
+
+async def test_setproactive_unknown_subcommand_shows_usage_and_changes_nothing(repo, scheduler):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setproactive(message, cmd("banana"), bot, repo, scheduler)
+
+    mode, *_ = await repo.get_proactive_settings(1)
+    assert mode == "off"
+    message.answer.assert_awaited_once()
+
+
+async def test_setproactive_no_args_shows_usage(repo, scheduler):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setproactive(message, cmd(None), bot, repo, scheduler)
+
+    message.answer.assert_awaited_once()
+
+
+async def test_setproactivecontext_updates_value(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setproactivecontext(message, cmd("5"), bot, repo)
+
+    _, _, _, context_size = await repo.get_proactive_settings(1)
+    assert context_size == 5
+
+
+async def test_setproactivecontext_rejects_out_of_range(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setproactivecontext(message, cmd("11"), bot, repo)
+
+    _, _, _, context_size = await repo.get_proactive_settings(1)
+    assert context_size == 3
+
+
+async def test_setproactivecontext_requires_admin(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=2)
+
+    await commands.cmd_setproactivecontext(message, cmd("5"), bot, repo)
+
+    _, _, _, context_size = await repo.get_proactive_settings(1)
+    assert context_size == 3
