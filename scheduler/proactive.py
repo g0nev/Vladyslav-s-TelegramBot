@@ -6,6 +6,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from ai.content_filter import check_hard_block
 from ai.openrouter_client import generate_proactive_message
 from db.repository import Repository
 from proactive import buffer
@@ -23,11 +24,15 @@ async def _scheduled_proactive_job(
         return
     if not buffer.has_new_since_last_fire(chat_id):
         return
-    if not buffer.cooldown_elapsed(chat_id):
+    if not buffer.try_acquire_cooldown(chat_id):
         return
 
     _, _, _, context_size = await repository.get_proactive_settings(chat_id)
-    recent = buffer.get_recent(chat_id, context_size)
+    recent = [
+        line
+        for line in buffer.get_recent(chat_id, context_size)
+        if not check_hard_block(line)
+    ]
     text = await generate_proactive_message(persona, recent)
     if not text:
         return

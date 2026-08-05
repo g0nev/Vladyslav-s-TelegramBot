@@ -10,6 +10,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import ChatPermissions, Message
 
 from admin.permissions import is_admin
+from ai.content_filter import check_hard_block
 from ai.openrouter_client import generate_proactive_message, generate_violation_reaction
 from db.repository import Repository
 from moderation.logic import (
@@ -151,10 +152,14 @@ async def _maybe_send_proactive_reaction(
 
     if random.random() >= probability:
         return
-    if not buffer.cooldown_elapsed(message.chat.id):
+    if not buffer.try_acquire_cooldown(message.chat.id):
         return
 
-    recent = buffer.get_recent(message.chat.id, context_size)
+    recent = [
+        line
+        for line in buffer.get_recent(message.chat.id, context_size)
+        if not check_hard_block(line)
+    ]
     text = await generate_proactive_message(persona, recent)
     if not text:
         return

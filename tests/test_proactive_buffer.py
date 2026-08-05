@@ -103,3 +103,25 @@ def test_cooldown_elapsed_true_after_floor_seconds_pass(monkeypatch):
     fake_time[0] += buffer.MIN_COOLDOWN_SECONDS + 1
 
     assert buffer.cooldown_elapsed(chat_id=1) is True
+
+
+def test_try_acquire_cooldown_true_and_stamps_clock_when_not_cooling_down(monkeypatch):
+    fake_time = [1000.0]
+    monkeypatch.setattr(buffer, "monotonic", lambda: fake_time[0])
+
+    assert buffer.try_acquire_cooldown(chat_id=1) is True
+
+    fake_time[0] += 1.0
+    assert buffer.cooldown_elapsed(chat_id=1) is False
+
+
+def test_try_acquire_cooldown_false_and_does_not_change_clock_when_cooling_down(monkeypatch):
+    fake_time = [1000.0]
+    monkeypatch.setattr(buffer, "monotonic", lambda: fake_time[0])
+
+    buffer.mark_fired(chat_id=1, message_id=1)
+    stamped_at = buffer._last_fired_at[1]
+    fake_time[0] += 1.0
+
+    assert buffer.try_acquire_cooldown(chat_id=1) is False
+    assert buffer._last_fired_at[1] == stamped_at

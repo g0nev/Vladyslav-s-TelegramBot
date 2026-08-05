@@ -57,3 +57,17 @@ def cooldown_elapsed(chat_id: int) -> bool:
     if last_fired_at is None:
         return True
     return (monotonic() - last_fired_at) >= MIN_COOLDOWN_SECONDS
+
+
+def try_acquire_cooldown(chat_id: int) -> bool:
+    """Atomically check-and-reserve the cooldown slot for a chat.
+
+    Returns False (and reserves nothing) if the chat is still cooling down.
+    Returns True and immediately stamps the cooldown clock otherwise — call
+    this before starting generation, not after sending, so concurrent
+    callers racing on the same chat cannot both pass the check.
+    """
+    if not cooldown_elapsed(chat_id):
+        return False
+    _last_fired_at[chat_id] = monotonic()
+    return True
