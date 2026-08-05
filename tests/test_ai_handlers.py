@@ -29,13 +29,14 @@ def cmd(args):
     return CommandObject(prefix="/", command="ask", args=args)
 
 
-def make_message(chat_id=1, user_id=500, reply_user_id=None):
+def make_message(chat_id=1, user_id=500, reply_user_id=None, reply_text=None):
     reply = None
     if reply_user_id is not None:
         reply = SimpleNamespace(
             from_user=SimpleNamespace(
                 id=reply_user_id, mention_html=lambda: f"User{reply_user_id}"
-            )
+            ),
+            text=reply_text,
         )
     return SimpleNamespace(
         chat=SimpleNamespace(id=chat_id),
@@ -162,6 +163,58 @@ async def test_target_required_tool_without_reply_is_refused(repo):
             await cmd_ask(message, cmd("сбрось предупреждения"), AsyncMock(), repo, MagicMock())
     sent = message.answer.await_args.args[0]
     assert "ответьте" in sent.lower()
+
+
+async def test_reply_to_bot_message_passes_prior_answer_and_no_target(repo):
+    bot = AsyncMock()
+    bot.id = 999
+    message = make_message(
+        reply_user_id=999,
+        reply_text="Таймер реакции не установлен, проактивные действия выключены.",
+    )
+    captured = {}
+
+    async def fake(question, tools, **kwargs):
+        captured.update(kwargs)
+        return AIResponse(text="ответ")
+
+    with patch("ai.handlers.is_admin", AsyncMock(return_value=False)):
+        with patch("ai.handlers.ask_ai_with_tools", fake):
+            await cmd_ask(message, cmd("а как установить их"), bot, repo, MagicMock())
+
+    assert captured["prior_answer"] == (
+        "Таймер реакции не установлен, проактивные действия выключены."
+    )
+
+
+async def test_reply_to_bot_message_does_not_resolve_as_moderation_target(repo):
+    bot = AsyncMock()
+    bot.id = 999
+    message = make_message(reply_user_id=999, reply_text="какой-то прошлый ответ")
+    response = AIResponse(tool_name="reset_user_warnings", tool_arguments={})
+    with patch("ai.handlers.is_admin", AsyncMock(return_value=True)):
+        with patch("ai.handlers.ask_ai_with_tools", AsyncMock(return_value=response)):
+            await cmd_ask(message, cmd("сбрось предупреждения"), bot, repo, MagicMock())
+    sent = message.answer.await_args.args[0]
+    assert "ответьте" in sent.lower()
+
+
+async def test_reply_to_regular_user_still_resolves_target_without_prior_answer(repo):
+    bot = AsyncMock()
+    bot.id = 999
+    message = make_message(reply_user_id=100, reply_text="сообщение обычного юзера")
+    captured = {}
+
+    async def fake(question, tools, **kwargs):
+        captured.update(kwargs)
+        return AIResponse(tool_name="reset_user_warnings", tool_arguments={})
+
+    with patch("ai.handlers.is_admin", AsyncMock(return_value=True)):
+        with patch("ai.handlers.ask_ai_with_tools", fake):
+            await cmd_ask(message, cmd("сбрось предупреждения"), bot, repo, MagicMock())
+
+    assert captured.get("prior_answer") is None
+    assert "ответьте" not in message.answer.await_args.args[0].lower()
 
 
 async def test_non_admin_requesting_admin_tool_is_blocked(repo):

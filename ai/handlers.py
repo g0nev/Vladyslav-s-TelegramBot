@@ -4,6 +4,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -130,12 +131,24 @@ async def cmd_ask(
     allowed_names = ADMIN_TOOL_NAMES if admin else PUBLIC_TOOL_NAMES
 
     reply = message.reply_to_message
-    target_id = reply.from_user.id if reply and reply.from_user else None
-    target_mention = reply.from_user.mention_html() if reply and reply.from_user else None
+    reply_is_bot = reply is not None and reply.from_user is not None and reply.from_user.id == bot.id
+
+    target_id: Optional[int] = None
+    target_mention: Optional[str] = None
+    prior_answer: Optional[str] = None
+    if reply_is_bot:
+        prior_answer = reply.text
+    elif reply is not None and reply.from_user is not None:
+        target_id = reply.from_user.id
+        target_mention = reply.from_user.mention_html()
 
     try:
         response = await ask_ai_with_tools(
-            question, tools, repository=repository, chat_id=message.chat.id
+            question,
+            tools,
+            repository=repository,
+            chat_id=message.chat.id,
+            prior_answer=prior_answer,
         )
     except AIUnavailableError:
         await message.answer(UNAVAILABLE_MESSAGE)

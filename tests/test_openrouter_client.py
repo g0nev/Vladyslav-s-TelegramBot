@@ -299,6 +299,61 @@ async def test_ask_ai_with_tools_omits_persona_block_when_not_set(monkeypatch):
     assert payload["messages"][0]["content"] == SYSTEM_PROMPT
 
 
+async def test_ask_ai_with_tools_includes_prior_answer_as_assistant_turn(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = _text_response("ok")
+
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await ask_ai_with_tools(
+            "а как установить их",
+            tools=[],
+            repository=_fake_repository(),
+            chat_id=1,
+            prior_answer="Таймер реакции не установлен, проактивные действия выключены.",
+        )
+
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["messages"][1] == {
+        "role": "assistant",
+        "content": "Таймер реакции не установлен, проактивные действия выключены.",
+    }
+    assert payload["messages"][2] == {"role": "user", "content": "а как установить их"}
+
+
+async def test_ask_ai_with_tools_omits_assistant_turn_without_prior_answer(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = _text_response("ok")
+
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await ask_ai_with_tools(
+            "Привет", tools=[], repository=_fake_repository(), chat_id=1
+        )
+
+    payload = session.post.call_args.kwargs["json"]
+    assert len(payload["messages"]) == 2
+    assert payload["messages"][1] == {"role": "user", "content": "Привет"}
+
+
 async def test_ask_ai_with_tools_reads_reference_then_calls_tool(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
 
@@ -482,6 +537,16 @@ async def test_build_general_info_reflects_probability_proactive_mode():
     assert "5%" in info
 
 
+async def test_build_general_info_includes_full_manual_command_list():
+    repository = _fake_repository()
+
+    info = await build_general_info(chat_id=1, repository=repository)
+
+    assert "/setproactive" in info
+    assert "/setpersona" in info
+    assert "/pin" in info
+
+
 def test_build_tools_reference_lists_name_description_and_args():
     tools = [
         {
@@ -540,6 +605,12 @@ def test_system_prompt_forbids_tool_calls_on_plain_greeting():
 def test_system_prompt_treats_discussion_as_text_not_tool_call():
     assert "рассужда" in SYSTEM_PROMPT.lower()
     assert "не вызывай ни один инструмент" in SYSTEM_PROMPT
+
+
+def test_system_prompt_forbids_stalling_placeholder_reply():
+    lowered = SYSTEM_PROMPT.lower()
+    assert "подожди" in lowered or "секунду" in lowered
+    assert "следующего хода" in lowered or "нет продолжения" in lowered
 
 
 async def test_generate_violation_reaction_returns_text_on_success(monkeypatch):

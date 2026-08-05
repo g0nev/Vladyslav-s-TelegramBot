@@ -7,6 +7,7 @@ from typing import Optional
 import aiohttp
 
 import config
+from admin.bot_commands import BOT_COMMANDS
 from db.repository import Repository
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -84,6 +85,11 @@ SYSTEM_PROMPT = (
     "в ответе пользователю и не описывай сам процесс вызова («вызову инструмент», «сейчас "
     "проверю через...», «вот что выдал запрос» и т.п.) — сразу пиши финальный ответ по "
     "существу, как будто ты и так это знал.\n\n"
+    "У тебя нет следующего хода в рамках этого вопроса — если нужен инструмент, вызови "
+    "его сразу в этом же ответе, не откладывая. Никогда не отвечай заглушкой вида "
+    "«сейчас проверю», «дай мне секунду», «уточню и вернусь» без реального вызова "
+    "инструмента в этом же сообщении — если ты не вызвал инструмент, у тебя не будет "
+    "второго шанса, и пользователь просто не получит ответ.\n\n"
     "Дёргай их только когда пользователь явно просит выполнить действие или прямо "
     "спрашивает про твои возможности/бота/настройки: «что ты умеешь», «какие есть "
     "команды» → read_tools_reference; вопрос про бота/разработчика/правила модерации/"
@@ -196,7 +202,11 @@ async def build_general_info(chat_id: int, repository: Repository) -> str:
         f"    • текст кика: {_template(kick_message)}\n"
         f"    • характер/стиль общения: {persona if persona else 'не задан (обычный стиль)'}\n"
         f"    • проактивные сообщения: {proactive_summary}\n"
-        f"    • контекст для проактивных сообщений: последние {proactive_context_size} сообщений"
+        f"    • контекст для проактивных сообщений: последние {proactive_context_size} сообщений\n"
+        "Полный список команд бота (админ вводит их сам в чате как /команда — это не то "
+        "же самое, что твой набор действий через call_tool, но эти команды реально "
+        "существуют и работают):\n"
+        + "\n".join(f"    • /{cmd.command} — {cmd.description}" for cmd in BOT_COMMANDS)
     )
 
 
@@ -237,7 +247,12 @@ async def ask_ai(question: str) -> str:
 
 
 async def ask_ai_with_tools(
-    question: str, tools: list[dict], *, repository: Repository, chat_id: int
+    question: str,
+    tools: list[dict],
+    *,
+    repository: Repository,
+    chat_id: int,
+    prior_answer: Optional[str] = None,
 ) -> AIResponse:
     """Ask the model, exposing only lightweight meta-tools by default.
 
@@ -247,6 +262,11 @@ async def ask_ai_with_tools(
     `tools` back as a tool result, then decides whether to call call_tool.
     Questions about the bot/developer/moderation rules/chat settings are
     answered the same way via read_general_info.
+
+    `/ask` itself has no memory across separate calls; `prior_answer`, when
+    given, is the bot's own previous reply in this chat (the user replied to
+    it), inserted as an assistant turn so the model can treat this as a
+    continuation rather than a fresh, context-free question.
     """
     if not config.OPENROUTER_API_KEY:
         raise AIUnavailableError("OPENROUTER_API_KEY is not configured")
@@ -259,10 +279,10 @@ async def ask_ai_with_tools(
             + persona
         )
 
-    messages: list[dict] = [
-        {"role": "system", "content": system_content},
-        {"role": "user", "content": question},
-    ]
+    messages: list[dict] = [{"role": "system", "content": system_content}]
+    if prior_answer:
+        messages.append({"role": "assistant", "content": prior_answer})
+    messages.append({"role": "user", "content": question})
 
     try:
         async with aiohttp.ClientSession() as session:
