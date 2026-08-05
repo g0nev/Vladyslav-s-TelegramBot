@@ -368,3 +368,49 @@ async def generate_violation_reaction(
         return None
 
     return text or None
+
+
+async def generate_proactive_message(persona: str, recent_messages: list[str]) -> Optional[str]:
+    """Single non-tool completion call for an unprompted chat reaction.
+
+    Swallows every failure mode (missing key, non-200, network error,
+    timeout, malformed/empty response) into None so the caller simply
+    skips sending anything.
+    """
+    if not config.OPENROUTER_API_KEY:
+        return None
+
+    conversation = "\n".join(recent_messages) if recent_messages else "(сообщений пока не было)"
+    task_prompt = (
+        f"Характер бота в этом чате: {persona}\n"
+        f"Вот последние сообщения переписки:\n{conversation}\n\n"
+        "Напиши одну короткую (1-2 предложения) реплику в этот разговор от своего имени, "
+        "в заданном характере — как будто ты участник чата, который решил вставить своё "
+        "слово. Не здоровайся, не представляйся, не резюмируй переписку — просто "
+        "естественная реплика по теме."
+    )
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                OPENROUTER_URL,
+                headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"},
+                json={
+                    "model": config.OPENROUTER_MODEL,
+                    "messages": [{"role": "user", "content": task_prompt}],
+                    "max_tokens": config.OPENROUTER_MAX_TOKENS,
+                },
+                timeout=_REACTION_TIMEOUT,
+            ) as response:
+                if response.status != 200:
+                    return None
+                data = await response.json()
+    except (aiohttp.ClientError, TimeoutError, ValueError):
+        return None
+
+    try:
+        text = data["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return None
+
+    return text or None

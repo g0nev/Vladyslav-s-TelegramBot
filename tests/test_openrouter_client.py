@@ -17,6 +17,7 @@ from ai.openrouter_client import (
     ask_ai_with_tools,
     build_general_info,
     build_tools_reference,
+    generate_proactive_message,
     generate_violation_reaction,
 )
 
@@ -658,3 +659,162 @@ async def test_generate_violation_reaction_includes_persona_and_punishment_in_pr
     prompt = payload["messages"][0]["content"]
     assert "Дерзкий стиль и юмор" in prompt
     assert "15 минут" in prompt
+
+
+async def test_generate_proactive_message_returns_text_on_success(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(
+        return_value={"choices": [{"message": {"content": "  О, интересная тема!  "}}]}
+    )
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_proactive_message("Дерзкий стиль", ["Аня: как дела"])
+
+    assert result == "О, интересная тема!"
+
+
+async def test_generate_proactive_message_returns_none_when_key_missing(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
+
+    result = await generate_proactive_message("Дерзкий стиль", ["Аня: привет"])
+
+    assert result is None
+
+
+async def test_generate_proactive_message_returns_none_on_non_200(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 500
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_proactive_message("Дерзкий стиль", ["Аня: привет"])
+
+    assert result is None
+
+
+async def test_generate_proactive_message_returns_none_on_client_error(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(side_effect=aiohttp.ClientConnectionError("boom"))
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        result = await generate_proactive_message("Дерзкий стиль", ["Аня: привет"])
+
+    assert result is None
+
+
+async def test_generate_proactive_message_returns_none_on_timeout(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(side_effect=TimeoutError())
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        result = await generate_proactive_message("Дерзкий стиль", ["Аня: привет"])
+
+    assert result is None
+
+
+async def test_generate_proactive_message_returns_none_on_empty_content(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"choices": [{"message": {"content": "   "}}]})
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_proactive_message("Дерзкий стиль", ["Аня: привет"])
+
+    assert result is None
+
+
+async def test_generate_proactive_message_returns_none_on_malformed_response(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"unexpected": "shape"})
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_proactive_message("Дерзкий стиль", ["Аня: привет"])
+
+    assert result is None
+
+
+async def test_generate_proactive_message_returns_none_on_json_decode_error(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(side_effect=json.JSONDecodeError("Expecting value", "", 0))
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_proactive_message("Дерзкий стиль", ["Аня: привет"])
+
+    assert result is None
+
+
+async def test_generate_proactive_message_includes_persona_and_recent_messages_in_prompt(
+    monkeypatch,
+):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"choices": [{"message": {"content": "Ок"}}]})
+
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await generate_proactive_message(
+            "Дерзкий стиль и юмор", ["Аня: го в кино", "Боря: не хочу"]
+        )
+
+    payload = session.post.call_args.kwargs["json"]
+    prompt = payload["messages"][0]["content"]
+    assert "Дерзкий стиль и юмор" in prompt
+    assert "Аня: го в кино" in prompt
+    assert "Боря: не хочу" in prompt
+
+
+async def test_generate_proactive_message_handles_empty_recent_messages(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"choices": [{"message": {"content": "Привет!"}}]})
+
+    with patch(
+        "ai.openrouter_client.aiohttp.ClientSession",
+        return_value=_make_session_cm(response),
+    ):
+        result = await generate_proactive_message("Дерзкий стиль", [])
+
+    assert result == "Привет!"
