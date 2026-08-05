@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -9,7 +10,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import ChatPermissions, Message
 
 from admin.permissions import is_admin
-from ai.openrouter_client import generate_violation_reaction
+from ai.openrouter_client import generate_proactive_message, generate_violation_reaction
 from db.repository import Repository
 from moderation.logic import (
     compute_violation,
@@ -17,6 +18,7 @@ from moderation.logic import (
     format_punishment_message,
     merge_trigger_words,
 )
+from proactive import buffer
 
 router = Router(name="moderation")
 
@@ -55,6 +57,10 @@ async def handle_moderated_message(
 ) -> None:
     if message.from_user is None or message.text is None:
         return
+
+    buffer.record_message(
+        message.chat.id, message.from_user.full_name, message.text, message.message_id
+    )
 
     if await is_admin(bot, message.chat.id, message.from_user.id):
         return
@@ -127,6 +133,42 @@ async def handle_moderated_message(
     await message.answer(text)
 
 
+async def _maybe_send_proactive_reaction(
+    message: Message, bot: Bot, repository: Repository
+) -> None:
+    if message.from_user is None or message.text is None:
+        return
+
+    mode, _, probability, context_size = await repository.get_proactive_settings(
+        message.chat.id
+    )
+    if mode != "probability":
+        return
+
+    persona = await repository.get_persona(message.chat.id)
+    if not persona:
+        return
+
+    if random.random() >= probability:
+        return
+    if not buffer.cooldown_elapsed(message.chat.id):
+        return
+
+    recent = buffer.get_recent(message.chat.id, context_size)
+    text = await generate_proactive_message(persona, recent)
+    if not text:
+        return
+
+    try:
+        await message.answer(html.escape(text))
+    except TelegramAPIError:
+        return
+
+    latest_id = buffer.latest_message_id(message.chat.id)
+    if latest_id is not None:
+        buffer.mark_fired(message.chat.id, latest_id)
+
+
 @router.message(F.chat.type.in_({"group", "supergroup"}), F.text)
 async def on_group_message(
     message: Message,
@@ -135,3 +177,4 @@ async def on_group_message(
     default_trigger_words: list[str],
 ) -> None:
     await handle_moderated_message(message, bot, repository, default_trigger_words)
+    await _maybe_send_proactive_reaction(message, bot, repository)

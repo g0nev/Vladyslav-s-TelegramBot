@@ -4,8 +4,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from aiogram.exceptions import TelegramAPIError
 
+import moderation.handlers as handlers
+import proactive.buffer as buffer
 from db.repository import Repository
-from moderation.handlers import handle_moderated_message
+from moderation.handlers import (
+    _maybe_send_proactive_reaction,
+    handle_moderated_message,
+    on_group_message,
+)
 
 
 @pytest.fixture
@@ -15,12 +21,26 @@ async def repo(tmp_path):
     await repository.close()
 
 
-def make_message(text, user_id=100, chat_id=1):
-    from_user = SimpleNamespace(id=user_id, mention_html=lambda: f"User{user_id}")
+@pytest.fixture(autouse=True)
+def clear_buffer():
+    buffer._buffers.clear()
+    buffer._last_fired_message_id.clear()
+    buffer._last_fired_at.clear()
+    yield
+    buffer._buffers.clear()
+    buffer._last_fired_message_id.clear()
+    buffer._last_fired_at.clear()
+
+
+def make_message(text, user_id=100, chat_id=1, message_id=1):
+    from_user = SimpleNamespace(
+        id=user_id, mention_html=lambda: f"User{user_id}", full_name=f"User{user_id}"
+    )
     return SimpleNamespace(
         text=text,
         from_user=from_user,
         chat=SimpleNamespace(id=chat_id),
+        message_id=message_id,
         answer=AsyncMock(),
     )
 
@@ -281,3 +301,131 @@ async def test_ai_not_called_when_no_persona_set(repo):
     mock_generate.assert_not_called()
     sent_text = message.answer.await_args.args[0]
     assert sent_text.startswith("User100, предупреждение")
+
+
+async def test_message_is_recorded_into_proactive_buffer(repo):
+    bot = await make_bot()
+    message = make_message("обычное сообщение", message_id=42)
+
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    assert buffer.get_recent(chat_id=1, n=1) == ["User100: обычное сообщение"]
+
+
+async def test_admin_message_is_still_recorded_into_buffer(repo):
+    bot = await make_bot(admin_ids={100})
+    message = make_message("сообщение админа", message_id=7)
+
+    await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    assert buffer.get_recent(chat_id=1, n=1) == ["User100: сообщение админа"]
+
+
+async def test_proactive_reaction_skipped_when_mode_is_off(repo):
+    bot = await make_bot()
+    message = make_message("привет всем")
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    buffer.record_message(chat_id=1, author="User100", text="привет всем", message_id=1)
+
+    await _maybe_send_proactive_reaction(message, bot, repo)
+
+    message.answer.assert_not_called()
+
+
+async def test_proactive_reaction_skipped_without_persona(repo):
+    bot = await make_bot()
+    message = make_message("привет всем")
+    await repo.set_proactive_probability(chat_id=1, probability=1.0)
+
+    await _maybe_send_proactive_reaction(message, bot, repo)
+
+    message.answer.assert_not_called()
+
+
+async def test_proactive_reaction_skipped_when_dice_roll_fails(repo, monkeypatch):
+    bot = await make_bot()
+    message = make_message("привет всем")
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    await repo.set_proactive_probability(chat_id=1, probability=0.01)
+    monkeypatch.setattr(handlers.random, "random", lambda: 0.5)
+
+    await _maybe_send_proactive_reaction(message, bot, repo)
+
+    message.answer.assert_not_called()
+
+
+async def test_proactive_reaction_sent_on_dice_win(repo, monkeypatch):
+    bot = await make_bot()
+    message = make_message("о чём поговорим", message_id=5)
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    await repo.set_proactive_probability(chat_id=1, probability=0.5)
+    buffer.record_message(chat_id=1, author="User100", text="о чём поговорим", message_id=5)
+    monkeypatch.setattr(handlers.random, "random", lambda: 0.1)
+
+    with patch(
+        "moderation.handlers.generate_proactive_message",
+        AsyncMock(return_value="О, интересная тема!"),
+    ):
+        await _maybe_send_proactive_reaction(message, bot, repo)
+
+    message.answer.assert_awaited_once_with("О, интересная тема!")
+
+
+async def test_proactive_reaction_skipped_on_cooldown(repo, monkeypatch):
+    bot = await make_bot()
+    message = make_message("привет", message_id=2)
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    await repo.set_proactive_probability(chat_id=1, probability=1.0)
+    buffer.mark_fired(chat_id=1, message_id=1)
+    monkeypatch.setattr(handlers.random, "random", lambda: 0.0)
+
+    await _maybe_send_proactive_reaction(message, bot, repo)
+
+    message.answer.assert_not_called()
+
+
+async def test_proactive_reaction_not_sent_when_generation_returns_none(repo, monkeypatch):
+    bot = await make_bot()
+    message = make_message("привет", message_id=3)
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    await repo.set_proactive_probability(chat_id=1, probability=1.0)
+    monkeypatch.setattr(handlers.random, "random", lambda: 0.0)
+
+    with patch(
+        "moderation.handlers.generate_proactive_message", AsyncMock(return_value=None)
+    ):
+        await _maybe_send_proactive_reaction(message, bot, repo)
+
+    message.answer.assert_not_called()
+
+
+async def test_proactive_reaction_fires_for_admin_sender_too(repo, monkeypatch):
+    bot = await make_bot(admin_ids={100})
+    message = make_message("привет", message_id=4)
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    await repo.set_proactive_probability(chat_id=1, probability=1.0)
+    monkeypatch.setattr(handlers.random, "random", lambda: 0.0)
+
+    with patch(
+        "moderation.handlers.generate_proactive_message",
+        AsyncMock(return_value="реплика"),
+    ):
+        await _maybe_send_proactive_reaction(message, bot, repo)
+
+    message.answer.assert_awaited_once_with("реплика")
+
+
+async def test_on_group_message_wires_both_moderation_and_proactive_paths(repo, monkeypatch):
+    bot = await make_bot()
+    message = make_message("обычное сообщение", message_id=9)
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    await repo.set_proactive_probability(chat_id=1, probability=1.0)
+    monkeypatch.setattr(handlers.random, "random", lambda: 0.0)
+
+    with patch(
+        "moderation.handlers.generate_proactive_message",
+        AsyncMock(return_value="Реплика бота"),
+    ):
+        await on_group_message(message, bot, repo, default_trigger_words=[])
+
+    message.answer.assert_awaited_once_with("Реплика бота")
