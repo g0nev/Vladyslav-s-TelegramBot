@@ -116,6 +116,7 @@ async def test_migration_adds_columns_to_preexisting_db(tmp_path):
     mute_minutes, kick_after = await reopened_repo.get_escalation_settings(chat_id=1)
     assert (mute_minutes, kick_after) == (5, 3)
     assert await reopened_repo.get_persona(chat_id=1) is None
+    assert await reopened_repo.get_proactive_settings(chat_id=1) == ("off", 0, 0.0, 3)
     await reopened_repo.close()
 
 
@@ -169,3 +170,60 @@ async def test_persona_cleared_with_none(repo):
     await repo.set_persona(chat_id=1, text="Дерзко")
     await repo.set_persona(chat_id=1, text=None)
     assert await repo.get_persona(chat_id=1) is None
+
+
+async def test_proactive_settings_default(repo):
+    assert await repo.get_proactive_settings(chat_id=1) == ("off", 0, 0.0, 3)
+
+
+async def test_set_proactive_interval_updates_mode_and_minutes(repo):
+    await repo.set_proactive_interval(chat_id=1, minutes=20)
+
+    assert await repo.get_proactive_settings(chat_id=1) == ("interval", 20, 0.0, 3)
+
+
+async def test_set_proactive_probability_updates_mode_and_probability(repo):
+    await repo.set_proactive_probability(chat_id=1, probability=0.05)
+
+    assert await repo.get_proactive_settings(chat_id=1) == ("probability", 0, 0.05, 3)
+
+
+async def test_set_proactive_off_resets_mode_and_values(repo):
+    await repo.set_proactive_interval(chat_id=1, minutes=20)
+
+    await repo.set_proactive_off(chat_id=1)
+
+    assert await repo.get_proactive_settings(chat_id=1) == ("off", 0, 0.0, 3)
+
+
+async def test_set_proactive_context_size(repo):
+    await repo.set_proactive_context_size(chat_id=1, size=7)
+
+    assert await repo.get_proactive_settings(chat_id=1) == ("off", 0, 0.0, 7)
+
+
+async def test_switching_from_interval_to_probability_clears_interval_minutes(repo):
+    await repo.set_proactive_interval(chat_id=1, minutes=20)
+
+    await repo.set_proactive_probability(chat_id=1, probability=0.1)
+
+    assert await repo.get_proactive_settings(chat_id=1) == ("probability", 0, 0.1, 3)
+
+
+async def test_switching_from_probability_to_interval_clears_probability(repo):
+    await repo.set_proactive_probability(chat_id=1, probability=0.1)
+
+    await repo.set_proactive_interval(chat_id=1, minutes=20)
+
+    assert await repo.get_proactive_settings(chat_id=1) == ("interval", 20, 0.0, 3)
+
+
+async def test_list_active_proactive_interval_chats_only_interval_mode_positive_minutes(repo):
+    await repo.set_proactive_interval(chat_id=1, minutes=20)
+    await repo.set_proactive_probability(chat_id=2, probability=0.1)
+    await repo.set_proactive_interval(chat_id=3, minutes=20)
+    await repo.set_proactive_off(chat_id=3)
+
+    chats = await repo.list_active_proactive_interval_chats()
+
+    assert chats == [(1, 20)]

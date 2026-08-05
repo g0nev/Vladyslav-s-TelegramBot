@@ -17,6 +17,10 @@ _MIGRATION_COLUMNS = {
     "mute_minutes": "INTEGER NOT NULL DEFAULT 5",
     "kick_after_violation": "INTEGER NOT NULL DEFAULT 3",
     "persona": "TEXT",
+    "proactive_mode": "TEXT NOT NULL DEFAULT 'off'",
+    "proactive_interval_min": "INTEGER NOT NULL DEFAULT 0",
+    "proactive_probability": "REAL NOT NULL DEFAULT 0.0",
+    "proactive_context_size": "INTEGER NOT NULL DEFAULT 3",
 }
 
 
@@ -269,3 +273,56 @@ class Repository:
             "UPDATE chat_settings SET persona = ? WHERE chat_id = ?", (text, chat_id)
         )
         await self._conn.commit()
+
+    async def get_proactive_settings(self, chat_id: int) -> tuple[str, int, float, int]:
+        await self.get_chat_settings(chat_id)
+        cursor = await self._conn.execute(
+            "SELECT proactive_mode, proactive_interval_min, proactive_probability, "
+            "proactive_context_size FROM chat_settings WHERE chat_id = ?",
+            (chat_id,),
+        )
+        row = await cursor.fetchone()
+        return (row[0], row[1], row[2], row[3])
+
+    async def set_proactive_off(self, chat_id: int) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET proactive_mode = 'off', proactive_interval_min = 0, "
+            "proactive_probability = 0.0 WHERE chat_id = ?",
+            (chat_id,),
+        )
+        await self._conn.commit()
+
+    async def set_proactive_interval(self, chat_id: int, minutes: int) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET proactive_mode = 'interval', "
+            "proactive_interval_min = ?, proactive_probability = 0.0 WHERE chat_id = ?",
+            (minutes, chat_id),
+        )
+        await self._conn.commit()
+
+    async def set_proactive_probability(self, chat_id: int, probability: float) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET proactive_mode = 'probability', "
+            "proactive_probability = ?, proactive_interval_min = 0 WHERE chat_id = ?",
+            (probability, chat_id),
+        )
+        await self._conn.commit()
+
+    async def set_proactive_context_size(self, chat_id: int, size: int) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET proactive_context_size = ? WHERE chat_id = ?",
+            (size, chat_id),
+        )
+        await self._conn.commit()
+
+    async def list_active_proactive_interval_chats(self) -> list[tuple[int, int]]:
+        cursor = await self._conn.execute(
+            "SELECT chat_id, proactive_interval_min FROM chat_settings "
+            "WHERE proactive_mode = 'interval' AND proactive_interval_min > 0"
+        )
+        rows = await cursor.fetchall()
+        return [(row[0], row[1]) for row in rows]
