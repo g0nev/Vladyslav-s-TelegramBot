@@ -28,12 +28,14 @@ def _fake_repository(
     templates=(None, None, None),
     escalation=(5, 3),
     persona=None,
+    proactive=("off", 0, 0.0, 3),
 ):
     repository = MagicMock()
     repository.get_chat_settings = AsyncMock(return_value=(broadcast_interval, reset_days))
     repository.get_message_templates = AsyncMock(return_value=templates)
     repository.get_escalation_settings = AsyncMock(return_value=escalation)
     repository.get_persona = AsyncMock(return_value=persona)
+    repository.get_proactive_settings = AsyncMock(return_value=proactive)
     return repository
 
 
@@ -428,10 +430,12 @@ async def test_build_general_info_includes_developer_and_chat_settings():
     assert "стандартный" in info
     assert "5 мин." in info
     assert "не задан (обычный стиль)" in info
+    assert "выключены" in info
     repository.get_chat_settings.assert_awaited_once_with(42)
     repository.get_message_templates.assert_awaited_once_with(42)
     repository.get_escalation_settings.assert_awaited_once_with(42)
     repository.get_persona.assert_awaited_once_with(42)
+    repository.get_proactive_settings.assert_awaited_once_with(42)
 
 
 async def test_build_general_info_includes_persona_when_set():
@@ -459,6 +463,23 @@ async def test_build_general_info_kick_after_two_has_no_mute_stage():
 
     assert "2-е и далее" in info
     assert "мьют на" not in info
+
+
+async def test_build_general_info_reflects_interval_proactive_mode():
+    repository = _fake_repository(proactive=("interval", 15, 0.0, 5))
+
+    info = await build_general_info(chat_id=1, repository=repository)
+
+    assert "раз в 15 мин" in info
+    assert "последние 5 сообщений" in info
+
+
+async def test_build_general_info_reflects_probability_proactive_mode():
+    repository = _fake_repository(proactive=("probability", 0, 0.05, 3))
+
+    info = await build_general_info(chat_id=1, repository=repository)
+
+    assert "5%" in info
 
 
 def test_build_tools_reference_lists_name_description_and_args():

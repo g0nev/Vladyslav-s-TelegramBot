@@ -328,6 +328,12 @@ def test_wrap_tool_names_wraps_multiple_names_in_one_text():
     assert _wrap_tool_names(text) == expected
 
 
+def test_wrap_tool_names_wraps_meta_tool_names():
+    text = "Вызову read_general_info, а потом call_tool и read_tools_reference"
+    expected = "Вызову `read_general_info`, а потом `call_tool` и `read_tools_reference`"
+    assert _wrap_tool_names(text) == expected
+
+
 async def test_text_response_wraps_tool_names_in_backticks(repo):
     message = make_message()
     response = AIResponse(text="используй list_trigger_words чтобы посмотреть список")

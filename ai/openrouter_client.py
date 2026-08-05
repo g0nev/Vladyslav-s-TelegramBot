@@ -80,6 +80,10 @@ SYSTEM_PROMPT = (
     "аргументами; read_general_info() — информация о боте, разработчике, логике "
     "модерации и текущих настройках этого чата; call_tool(name, arguments) — выполнение "
     "конкретной команды по её точному имени из каталога.\n\n"
+    "Никогда не пиши эти три имени (read_tools_reference, read_general_info, call_tool) "
+    "в ответе пользователю и не описывай сам процесс вызова («вызову инструмент», «сейчас "
+    "проверю через...», «вот что выдал запрос» и т.п.) — сразу пиши финальный ответ по "
+    "существу, как будто ты и так это знал.\n\n"
     "Дёргай их только когда пользователь явно просит выполнить действие или прямо "
     "спрашивает про твои возможности/бота/настройки: «что ты умеешь», «какие есть "
     "команды» → read_tools_reference; вопрос про бота/разработчика/правила модерации/"
@@ -153,9 +157,19 @@ async def build_general_info(chat_id: int, repository: Repository) -> str:
     warn_message, mute_message, kick_message = await repository.get_message_templates(chat_id)
     mute_minutes, kick_after = await repository.get_escalation_settings(chat_id)
     persona = await repository.get_persona(chat_id)
+    proactive_mode, proactive_interval_min, proactive_probability, proactive_context_size = (
+        await repository.get_proactive_settings(chat_id)
+    )
 
     def _template(text: Optional[str]) -> str:
         return text if text else "не задан (используется стандартный)"
+
+    if proactive_mode == "interval":
+        proactive_summary = f"раз в {proactive_interval_min} мин. (если были новые сообщения)"
+    elif proactive_mode == "probability":
+        proactive_summary = f"{proactive_probability * 100:.0f}% шанс среагировать на сообщение"
+    else:
+        proactive_summary = "выключены"
 
     if kick_after <= 2:
         escalation_rule = (
@@ -180,7 +194,9 @@ async def build_general_info(chat_id: int, repository: Repository) -> str:
         f"    • текст предупреждения: {_template(warn_message)}\n"
         f"    • текст мьюта: {_template(mute_message)}\n"
         f"    • текст кика: {_template(kick_message)}\n"
-        f"    • характер/стиль общения: {persona if persona else 'не задан (обычный стиль)'}"
+        f"    • характер/стиль общения: {persona if persona else 'не задан (обычный стиль)'}\n"
+        f"    • проактивные сообщения: {proactive_summary}\n"
+        f"    • контекст для проактивных сообщений: последние {proactive_context_size} сообщений"
     )
 
 

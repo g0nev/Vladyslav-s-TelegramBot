@@ -18,7 +18,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from admin.permissions import is_admin
 from ai.content_filter import check_hard_block
-from ai.openrouter_client import AIUnavailableError, ask_ai_with_tools
+from ai.openrouter_client import (
+    CALL_TOOL,
+    READ_GENERAL_INFO,
+    READ_TOOLS_REFERENCE,
+    AIUnavailableError,
+    ask_ai_with_tools,
+)
 from ai.tools import (
     ADMIN_TOOL_NAMES,
     ADMIN_TOOLS,
@@ -43,9 +49,15 @@ EXPIRED_MESSAGE = "Это подтверждение больше не дейс�
 NO_RIGHTS_MESSAGE = "Не удалось: боту не хватает прав."
 CANCELLED_MESSAGE = "Действие отменено."
 
+_WRAPPABLE_TOOL_NAMES = set(ADMIN_TOOL_NAMES) | {
+    READ_TOOLS_REFERENCE,
+    READ_GENERAL_INFO,
+    CALL_TOOL,
+}
+
 _TOOL_NAME_PATTERN = re.compile(
     r"(?<!`)\b("
-    + "|".join(re.escape(name) for name in sorted(ADMIN_TOOL_NAMES, key=len, reverse=True))
+    + "|".join(re.escape(name) for name in sorted(_WRAPPABLE_TOOL_NAMES, key=len, reverse=True))
     + r")\b(?!`)"
 )
 
