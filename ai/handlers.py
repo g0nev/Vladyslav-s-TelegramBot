@@ -104,6 +104,7 @@ def _extract_minutes(arguments: dict) -> int:
 
 
 @router.message(Command("ask"))
+@router.channel_post(Command("ask"))
 async def cmd_ask(
     message: Message,
     command: CommandObject,
@@ -119,14 +120,15 @@ async def cmd_ask(
 
     question = command.args.strip()
 
-    if message.from_user is None:
+    is_channel_post = message.chat.type == "channel"
+    if message.from_user is None and not is_channel_post:
         return
 
     if check_hard_block(question):
         await message.answer(BLOCK_MESSAGE)
         return
 
-    admin = await is_admin(bot, message.chat.id, message.from_user.id)
+    admin = True if is_channel_post else await is_admin(bot, message.chat.id, message.from_user.id)
     tools = ADMIN_TOOLS if admin else PUBLIC_TOOLS
     allowed_names = ADMIN_TOOL_NAMES if admin else PUBLIC_TOOL_NAMES
 

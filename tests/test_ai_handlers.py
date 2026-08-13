@@ -29,7 +29,7 @@ def cmd(args):
     return CommandObject(prefix="/", command="ask", args=args)
 
 
-def make_message(chat_id=1, user_id=500, reply_user_id=None, reply_text=None):
+def make_message(chat_id=1, user_id=500, reply_user_id=None, reply_text=None, chat_type="group"):
     reply = None
     if reply_user_id is not None:
         reply = SimpleNamespace(
@@ -39,7 +39,7 @@ def make_message(chat_id=1, user_id=500, reply_user_id=None, reply_text=None):
             text=reply_text,
         )
     return SimpleNamespace(
-        chat=SimpleNamespace(id=chat_id),
+        chat=SimpleNamespace(id=chat_id, type=chat_type),
         from_user=SimpleNamespace(id=user_id),
         reply_to_message=reply,
         answer=AsyncMock(),
@@ -65,7 +65,7 @@ async def test_ask_without_args_shows_usage():
 
 async def test_ask_with_anonymous_admin_does_not_crash(repo):
     message = SimpleNamespace(
-        chat=SimpleNamespace(id=1),
+        chat=SimpleNamespace(id=1, type="group"),
         from_user=None,
         reply_to_message=None,
         answer=AsyncMock(),
@@ -395,3 +395,39 @@ async def test_text_response_wraps_tool_names_in_backticks(repo):
             await cmd_ask(message, cmd("привет"), AsyncMock(), repo, MagicMock())
     sent_text = message.answer.await_args.args[0]
     assert "`list_trigger_words`" in sent_text
+
+
+async def test_ask_from_channel_post_without_user_proceeds_as_admin(repo):
+    message = SimpleNamespace(
+        chat=SimpleNamespace(id=1, type="channel"),
+        from_user=None,
+        reply_to_message=None,
+        answer=AsyncMock(),
+    )
+    captured = {}
+
+    async def fake(question, tools, **kwargs):
+        captured["tools"] = tools
+        return AIResponse(text="ответ")
+
+    with patch("ai.handlers.is_admin", AsyncMock()) as is_admin_mock:
+        with patch("ai.handlers.ask_ai_with_tools", AsyncMock(side_effect=fake)):
+            await cmd_ask(message, cmd("привет"), AsyncMock(), repo, MagicMock())
+
+    is_admin_mock.assert_not_called()
+    assert captured["tools"] is ADMIN_TOOLS
+    message.answer.assert_awaited_once_with("ответ", parse_mode="Markdown")
+
+
+async def test_ask_from_channel_post_target_required_tool_without_reply_is_refused(repo):
+    message = SimpleNamespace(
+        chat=SimpleNamespace(id=1, type="channel"),
+        from_user=None,
+        reply_to_message=None,
+        answer=AsyncMock(),
+    )
+    response = AIResponse(tool_name="mute_user", tool_arguments={"minutes": 10})
+    with patch("ai.handlers.ask_ai_with_tools", AsyncMock(return_value=response)):
+        await cmd_ask(message, cmd("замьють кого-то"), AsyncMock(), repo, MagicMock())
+    sent = message.answer.await_args.args[0]
+    assert "ответьте" in sent.lower()
