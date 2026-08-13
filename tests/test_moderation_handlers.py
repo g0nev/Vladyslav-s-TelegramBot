@@ -9,8 +9,10 @@ import moderation.handlers as handlers
 import proactive.buffer as buffer
 from db.repository import Repository
 from moderation.handlers import (
+    _author_name,
     _maybe_send_proactive_reaction,
     handle_moderated_message,
+    on_channel_post,
     on_group_message,
 )
 
@@ -55,6 +57,17 @@ async def make_bot(admin_ids=()):
 
     bot.get_chat_member.side_effect = get_chat_member
     return bot
+
+
+def make_channel_post(text, chat_id=1, message_id=1, channel_title="My Music"):
+    return SimpleNamespace(
+        text=text,
+        from_user=None,
+        sender_chat=SimpleNamespace(title=channel_title),
+        chat=SimpleNamespace(id=chat_id, type="channel"),
+        message_id=message_id,
+        answer=AsyncMock(),
+    )
 
 
 async def test_admin_messages_are_ignored(repo):
@@ -495,3 +508,49 @@ async def test_on_group_message_wires_both_moderation_and_proactive_paths(repo, 
         await on_group_message(message, bot, repo, default_trigger_words=[])
 
     message.answer.assert_awaited_once_with("Реплика бота")
+
+
+def test_author_name_uses_sender_chat_title_when_no_user():
+    message = make_channel_post("привет", channel_title="My Music")
+    assert _author_name(message) == "My Music"
+
+
+def test_author_name_falls_back_to_default_without_sender_chat():
+    message = SimpleNamespace(from_user=None, sender_chat=None)
+    assert _author_name(message) == "канал"
+
+
+async def test_on_channel_post_records_into_buffer(repo):
+    bot = await make_bot()
+    message = make_channel_post("новый пост", message_id=11, channel_title="My Music")
+
+    await on_channel_post(message, bot, repo)
+
+    assert buffer.get_recent(chat_id=1, n=1) == ["My Music: новый пост"]
+
+
+async def test_on_channel_post_does_not_moderate(repo):
+    bot = await make_bot()
+    message = make_channel_post("спам спам спам", message_id=12)
+
+    await on_channel_post(message, bot, repo)
+
+    bot.restrict_chat_member.assert_not_called()
+    bot.ban_chat_member.assert_not_called()
+    message.answer.assert_not_called()
+
+
+async def test_on_channel_post_triggers_proactive_reaction(repo, monkeypatch):
+    bot = await make_bot()
+    message = make_channel_post("о чём поговорим", message_id=13, channel_title="My Music")
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    await repo.set_proactive_probability(chat_id=1, probability=1.0)
+    monkeypatch.setattr(handlers.random, "random", lambda: 0.0)
+
+    with patch(
+        "moderation.handlers.generate_proactive_message",
+        AsyncMock(return_value="О, интересно!"),
+    ):
+        await on_channel_post(message, bot, repo)
+
+    message.answer.assert_awaited_once_with("О, интересно!")

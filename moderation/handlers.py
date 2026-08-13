@@ -39,6 +39,14 @@ def _mention(message: Message) -> str:
     return message.from_user.mention_html()
 
 
+def _author_name(message: Message) -> str:
+    if message.from_user is not None:
+        return message.from_user.full_name
+    if message.sender_chat is not None:
+        return message.sender_chat.title or "канал"
+    return "канал"
+
+
 async def _notify_missing_permissions(message: Message) -> None:
     now = datetime.now(timezone.utc)
     last_notice = _last_permission_notice.get(message.chat.id)
@@ -60,7 +68,7 @@ async def handle_moderated_message(
         return
 
     buffer.record_message(
-        message.chat.id, message.from_user.full_name, message.text, message.message_id
+        message.chat.id, _author_name(message), message.text, message.message_id
     )
 
     if await is_admin(bot, message.chat.id, message.from_user.id):
@@ -137,7 +145,7 @@ async def handle_moderated_message(
 async def _maybe_send_proactive_reaction(
     message: Message, bot: Bot, repository: Repository
 ) -> None:
-    if message.from_user is None or message.text is None:
+    if message.text is None:
         return
 
     mode, _, probability, context_size = await repository.get_proactive_settings(
@@ -182,4 +190,14 @@ async def on_group_message(
     default_trigger_words: list[str],
 ) -> None:
     await handle_moderated_message(message, bot, repository, default_trigger_words)
+    await _maybe_send_proactive_reaction(message, bot, repository)
+
+
+@router.channel_post(F.text)
+async def on_channel_post(
+    message: Message, bot: Bot, repository: Repository
+) -> None:
+    buffer.record_message(
+        message.chat.id, _author_name(message), message.text, message.message_id
+    )
     await _maybe_send_proactive_reaction(message, bot, repository)
