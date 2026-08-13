@@ -40,7 +40,7 @@ def make_message(text, user_id=100, chat_id=1, message_id=1):
     return SimpleNamespace(
         text=text,
         from_user=from_user,
-        chat=SimpleNamespace(id=chat_id),
+        chat=SimpleNamespace(id=chat_id, type="group"),
         message_id=message_id,
         answer=AsyncMock(),
     )

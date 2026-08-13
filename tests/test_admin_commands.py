@@ -27,7 +27,7 @@ def scheduler():
 def make_message(user_id=1, chat_id=1, reply_to=None):
     from_user = SimpleNamespace(id=user_id, mention_html=lambda: f"User{user_id}")
     return SimpleNamespace(
-        chat=SimpleNamespace(id=chat_id),
+        chat=SimpleNamespace(id=chat_id, type="group"),
         from_user=from_user,
         reply_to_message=reply_to,
         answer=AsyncMock(),

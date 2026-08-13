@@ -12,6 +12,8 @@ async def is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
 
 
 async def require_admin(message: Message, bot: Bot) -> bool:
+    if message.chat.type == "channel":
+        return True
     if message.from_user is None:
         return False
     if not await is_admin(bot, message.chat.id, message.from_user.id):

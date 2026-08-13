@@ -32,10 +32,10 @@ async def test_is_admin_false_for_member():
     assert result is False
 
 
-def _make_message(user_id):
+def _make_message(user_id, chat_type="group"):
     from_user = None if user_id is None else SimpleNamespace(id=user_id)
     return SimpleNamespace(
-        chat=SimpleNamespace(id=1), from_user=from_user, answer=AsyncMock()
+        chat=SimpleNamespace(id=1, type=chat_type), from_user=from_user, answer=AsyncMock()
     )
 
 
@@ -65,3 +65,12 @@ async def test_require_admin_false_for_anonymous_user():
 
     assert await require_admin(message, bot) is False
     bot.get_chat_member.assert_not_called()
+
+
+async def test_require_admin_true_for_channel_post_without_user():
+    bot = AsyncMock()
+    message = _make_message(user_id=None, chat_type="channel")
+
+    assert await require_admin(message, bot) is True
+    bot.get_chat_member.assert_not_called()
+    message.answer.assert_not_called()
