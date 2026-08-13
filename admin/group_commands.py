@@ -41,6 +41,7 @@ def _default_unlocked_permissions() -> ChatPermissions:
 
 
 @router.message(Command("pin"))
+@router.channel_post(Command("pin"))
 async def cmd_pin(message: Message, bot: Bot) -> None:
     if not await _require_admin(message, bot):
         return
@@ -56,6 +57,7 @@ async def cmd_pin(message: Message, bot: Bot) -> None:
 
 
 @router.message(Command("unpin"))
+@router.channel_post(Command("unpin"))
 async def cmd_unpin(message: Message, bot: Bot) -> None:
     if not await _require_admin(message, bot):
         return
@@ -107,6 +109,7 @@ async def cmd_unlock(message: Message, bot: Bot, repository: Repository) -> None
 
 
 @router.message(Command("newlink"))
+@router.channel_post(Command("newlink"))
 async def cmd_newlink(message: Message, bot: Bot, repository: Repository) -> None:
     if not await _require_admin(message, bot):
         return
@@ -120,6 +123,7 @@ async def cmd_newlink(message: Message, bot: Bot, repository: Repository) -> Non
 
 
 @router.message(Command("revokelink"))
+@router.channel_post(Command("revokelink"))
 async def cmd_revokelink(message: Message, bot: Bot, repository: Repository) -> None:
     if not await _require_admin(message, bot):
         return
@@ -137,6 +141,7 @@ async def cmd_revokelink(message: Message, bot: Bot, repository: Repository) -> 
 
 
 @router.message(Command("chatinfo"))
+@router.channel_post(Command("chatinfo"))
 async def cmd_chatinfo(message: Message, bot: Bot) -> None:
     try:
         count = await bot.get_chat_member_count(message.chat.id)
@@ -152,6 +157,7 @@ async def cmd_chatinfo(message: Message, bot: Bot) -> None:
 
 
 @router.message(Command("settitle"))
+@router.channel_post(Command("settitle"))
 async def cmd_settitle(message: Message, command: CommandObject, bot: Bot) -> None:
     if not await _require_admin(message, bot):
         return
@@ -168,6 +174,7 @@ async def cmd_settitle(message: Message, command: CommandObject, bot: Bot) -> No
 
 
 @router.message(Command("setdescription"))
+@router.channel_post(Command("setdescription"))
 async def cmd_setdescription(message: Message, command: CommandObject, bot: Bot) -> None:
     if not await _require_admin(message, bot):
         return
@@ -181,6 +188,7 @@ async def cmd_setdescription(message: Message, command: CommandObject, bot: Bot)
 
 
 @router.message(Command("setphoto"))
+@router.channel_post(Command("setphoto"))
 async def cmd_setphoto(message: Message, bot: Bot) -> None:
     if not await _require_admin(message, bot):
         return

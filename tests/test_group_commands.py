@@ -12,6 +12,21 @@ from admin import group_commands
 from db.repository import Repository
 
 
+def test_channel_appropriate_commands_are_registered_for_channel_post():
+    registered = {h.callback for h in group_commands.router.channel_post.handlers}
+    expected = {
+        group_commands.cmd_pin,
+        group_commands.cmd_unpin,
+        group_commands.cmd_newlink,
+        group_commands.cmd_revokelink,
+        group_commands.cmd_chatinfo,
+        group_commands.cmd_settitle,
+        group_commands.cmd_setdescription,
+        group_commands.cmd_setphoto,
+    }
+    assert registered == expected
+
+
 @pytest.fixture
 async def repo(tmp_path):
     repository = await Repository.create(str(tmp_path / "test.db"))
