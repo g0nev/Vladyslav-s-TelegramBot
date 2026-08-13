@@ -18,6 +18,7 @@ router = Router(name="admin")
 
 
 @router.message(Command("addword"))
+@router.channel_post(Command("addword"))
 async def cmd_addword(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -32,6 +33,7 @@ async def cmd_addword(
 
 
 @router.message(Command("delword"))
+@router.channel_post(Command("delword"))
 async def cmd_delword(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -49,6 +51,7 @@ async def cmd_delword(
 
 
 @router.message(Command("listwords"))
+@router.channel_post(Command("listwords"))
 async def cmd_listwords(message: Message, repository: Repository) -> None:
     words = await repository.list_trigger_words(message.chat.id)
     if not words:
@@ -59,6 +62,7 @@ async def cmd_listwords(message: Message, repository: Repository) -> None:
 
 
 @router.message(Command("warns"))
+@router.channel_post(Command("warns"))
 async def cmd_warns(message: Message, repository: Repository) -> None:
     if message.reply_to_message is None or message.reply_to_message.from_user is None:
         await message.answer("Ответьте этой командой на сообщение пользователя.")
@@ -69,6 +73,7 @@ async def cmd_warns(message: Message, repository: Repository) -> None:
 
 
 @router.message(Command("resetwarns"))
+@router.channel_post(Command("resetwarns"))
 async def cmd_resetwarns(message: Message, bot: Bot, repository: Repository) -> None:
     if not await _require_admin(message, bot):
         return
@@ -81,6 +86,7 @@ async def cmd_resetwarns(message: Message, bot: Bot, repository: Repository) -> 
 
 
 @router.message(Command("setresetdays"))
+@router.channel_post(Command("setresetdays"))
 async def cmd_setresetdays(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -95,6 +101,7 @@ async def cmd_setresetdays(
 
 
 @router.message(Command("setinterval"))
+@router.channel_post(Command("setinterval"))
 async def cmd_setinterval(
     message: Message,
     command: CommandObject,
@@ -114,6 +121,7 @@ async def cmd_setinterval(
 
 
 @router.message(Command("setmuteminutes"))
+@router.channel_post(Command("setmuteminutes"))
 async def cmd_setmuteminutes(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -132,6 +140,7 @@ async def cmd_setmuteminutes(
 
 
 @router.message(Command("setkickafter"))
+@router.channel_post(Command("setkickafter"))
 async def cmd_setkickafter(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -146,6 +155,7 @@ async def cmd_setkickafter(
 
 
 @router.message(Command("addmsg"))
+@router.channel_post(Command("addmsg"))
 async def cmd_addmsg(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -159,6 +169,7 @@ async def cmd_addmsg(
 
 
 @router.message(Command("delmsg"))
+@router.channel_post(Command("delmsg"))
 async def cmd_delmsg(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -176,6 +187,7 @@ async def cmd_delmsg(
 
 
 @router.message(Command("listmsgs"))
+@router.channel_post(Command("listmsgs"))
 async def cmd_listmsgs(message: Message, bot: Bot, repository: Repository) -> None:
     if not await _require_admin(message, bot):
         return
@@ -195,6 +207,7 @@ _SETMSG_USAGE = (
 
 
 @router.message(Command("setwarnmsg"))
+@router.channel_post(Command("setwarnmsg"))
 async def cmd_setwarnmsg(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -208,6 +221,7 @@ async def cmd_setwarnmsg(
 
 
 @router.message(Command("setmutemsg"))
+@router.channel_post(Command("setmutemsg"))
 async def cmd_setmutemsg(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -221,6 +235,7 @@ async def cmd_setmutemsg(
 
 
 @router.message(Command("setkickmsg"))
+@router.channel_post(Command("setkickmsg"))
 async def cmd_setkickmsg(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -234,6 +249,7 @@ async def cmd_setkickmsg(
 
 
 @router.message(Command("resetmsgs"))
+@router.channel_post(Command("resetmsgs"))
 async def cmd_resetmsgs(message: Message, bot: Bot, repository: Repository) -> None:
     if not await _require_admin(message, bot):
         return
@@ -242,6 +258,7 @@ async def cmd_resetmsgs(message: Message, bot: Bot, repository: Repository) -> N
 
 
 @router.message(Command("setpersona"))
+@router.channel_post(Command("setpersona"))
 async def cmd_setpersona(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:
@@ -271,6 +288,7 @@ _SETPROACTIVE_USAGE = (
 
 
 @router.message(Command("setproactive"))
+@router.channel_post(Command("setproactive"))
 async def cmd_setproactive(
     message: Message,
     command: CommandObject,
@@ -323,6 +341,7 @@ async def cmd_setproactive(
 
 
 @router.message(Command("setproactivecontext"))
+@router.channel_post(Command("setproactivecontext"))
 async def cmd_setproactivecontext(
     message: Message, command: CommandObject, bot: Bot, repository: Repository
 ) -> None:

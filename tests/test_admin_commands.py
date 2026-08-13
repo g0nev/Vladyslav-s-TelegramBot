@@ -547,3 +547,29 @@ async def test_setproactivecontext_requires_admin(repo):
 
     _, _, _, context_size = await repo.get_proactive_settings(1)
     assert context_size == 3
+
+
+def test_channel_appropriate_commands_are_registered_for_channel_post():
+    registered = {h.callback for h in commands.router.channel_post.handlers}
+    expected = {
+        commands.cmd_addword,
+        commands.cmd_delword,
+        commands.cmd_listwords,
+        commands.cmd_warns,
+        commands.cmd_resetwarns,
+        commands.cmd_setresetdays,
+        commands.cmd_setinterval,
+        commands.cmd_setmuteminutes,
+        commands.cmd_setkickafter,
+        commands.cmd_addmsg,
+        commands.cmd_delmsg,
+        commands.cmd_listmsgs,
+        commands.cmd_setwarnmsg,
+        commands.cmd_setmutemsg,
+        commands.cmd_setkickmsg,
+        commands.cmd_resetmsgs,
+        commands.cmd_setpersona,
+        commands.cmd_setproactive,
+        commands.cmd_setproactivecontext,
+    }
+    assert registered == expected
