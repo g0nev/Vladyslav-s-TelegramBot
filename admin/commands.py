@@ -154,6 +154,25 @@ async def cmd_setkickafter(
     await message.answer(f"Кик теперь происходит начиная с {violations}-го нарушения.")
 
 
+@router.message(Command("setmaxtokens"))
+@router.channel_post(Command("setmaxtokens"))
+async def cmd_setmaxtokens(
+    message: Message, command: CommandObject, bot: Bot, repository: Repository
+) -> None:
+    if not await _require_admin(message, bot):
+        return
+    if (
+        not command.args
+        or not command.args.strip().isdigit()
+        or not (50 <= int(command.args.strip()) <= 3000)
+    ):
+        await message.answer("Использование: /setmaxtokens «число, 50-3000»")
+        return
+    tokens = int(command.args.strip())
+    await repository.set_max_tokens(message.chat.id, tokens)
+    await message.answer(f"Лимит токенов ответа установлен: {tokens}.")
+
+
 @router.message(Command("addmsg"))
 @router.channel_post(Command("addmsg"))
 async def cmd_addmsg(

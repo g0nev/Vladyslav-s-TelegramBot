@@ -21,6 +21,7 @@ BOT_COMMANDS: list[BotCommand] = [
     BotCommand(command="resetmsgs", description="Сбросить тексты наказаний к стандартным (админ)"),
     BotCommand(command="setmuteminutes", description="Длительность мьюта в минутах (админ)"),
     BotCommand(command="setkickafter", description="Номер нарушения, после которого кик (админ, ≥2)"),
+    BotCommand(command="setmaxtokens", description="Лимит длины ответа ИИ в токенах, 50-3000 (админ)"),
     BotCommand(command="setpersona", description="Задать характер/стиль поведения бота, без текста — сбросить (админ)"),
     BotCommand(
         command="setproactive",

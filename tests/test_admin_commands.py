@@ -347,6 +347,68 @@ async def test_setkickafter_updates_value(repo):
     assert kick_after == 5
 
 
+async def test_setmaxtokens_rejects_non_numeric(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmaxtokens(message, cmd("много"), bot, repo)
+
+    message.answer.assert_awaited_once_with("Использование: /setmaxtokens «число, 50-3000»")
+
+
+async def test_setmaxtokens_rejects_below_minimum(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmaxtokens(message, cmd("49"), bot, repo)
+
+    message.answer.assert_awaited_once_with("Использование: /setmaxtokens «число, 50-3000»")
+    assert await repo.get_max_tokens(1) == 300
+
+
+async def test_setmaxtokens_rejects_above_maximum(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmaxtokens(message, cmd("3001"), bot, repo)
+
+    message.answer.assert_awaited_once_with("Использование: /setmaxtokens «число, 50-3000»")
+    assert await repo.get_max_tokens(1) == 300
+
+
+async def test_setmaxtokens_updates_value(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmaxtokens(message, cmd("800"), bot, repo)
+
+    assert await repo.get_max_tokens(1) == 800
+    message.answer.assert_awaited_once_with("Лимит токенов ответа установлен: 800.")
+
+
+async def test_setmaxtokens_accepts_boundary_values(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmaxtokens(message, cmd("50"), bot, repo)
+    assert await repo.get_max_tokens(1) == 50
+
+    await commands.cmd_setmaxtokens(message, cmd("3000"), bot, repo)
+    assert await repo.get_max_tokens(1) == 3000
+
+
+async def test_setmaxtokens_requires_admin(repo):
+    bot = await make_bot(is_admin_user_id=999)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmaxtokens(message, cmd("800"), bot, repo)
+
+    message.answer.assert_awaited_once_with(
+        "Эта команда доступна только администраторам чата."
+    )
+    assert await repo.get_max_tokens(1) == 300
+
+
 async def test_resetmsgs_clears_all_templates(repo):
     bot = await make_bot(is_admin_user_id=1)
     await repo.set_warn_message(1, "кастом")
@@ -561,6 +623,7 @@ def test_channel_appropriate_commands_are_registered_for_channel_post():
         commands.cmd_setinterval,
         commands.cmd_setmuteminutes,
         commands.cmd_setkickafter,
+        commands.cmd_setmaxtokens,
         commands.cmd_addmsg,
         commands.cmd_delmsg,
         commands.cmd_listmsgs,

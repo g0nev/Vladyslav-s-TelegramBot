@@ -25,6 +25,7 @@ def test_bot_commands_cover_all_commands():
         "ask",
         "setmuteminutes",
         "setkickafter",
+        "setmaxtokens",
         "setpersona",
         "pin",
         "unpin",
