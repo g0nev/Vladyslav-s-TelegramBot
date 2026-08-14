@@ -184,6 +184,7 @@ async def build_general_info(chat_id: int, repository: Repository) -> str:
     proactive_mode, proactive_interval_min, proactive_probability, proactive_context_size = (
         await repository.get_proactive_settings(chat_id)
     )
+    max_tokens = await repository.get_max_tokens(chat_id)
 
     def _template(text: Optional[str]) -> str:
         return text if text else "не задан (используется стандартный)"
@@ -221,6 +222,7 @@ async def build_general_info(chat_id: int, repository: Repository) -> str:
         f"    • характер/стиль общения: {persona if persona else 'не задан (обычный стиль)'}\n"
         f"    • проактивные сообщения: {proactive_summary}\n"
         f"    • контекст для проактивных сообщений: последние {proactive_context_size} сообщений\n"
+        f"    • лимит длины ответа ИИ: {max_tokens} токенов\n"
         "Полный список команд бота (админ вводит их сам в чате как /команда — это не то "
         "же самое, что твой набор действий через call_tool, но эти команды реально "
         "существуют и работают):\n"

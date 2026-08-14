@@ -30,6 +30,7 @@ def _fake_repository(
     escalation=(5, 3),
     persona=None,
     proactive=("off", 0, 0.0, 3),
+    max_tokens=300,
 ):
     repository = MagicMock()
     repository.get_chat_settings = AsyncMock(return_value=(broadcast_interval, reset_days))
@@ -37,6 +38,7 @@ def _fake_repository(
     repository.get_escalation_settings = AsyncMock(return_value=escalation)
     repository.get_persona = AsyncMock(return_value=persona)
     repository.get_proactive_settings = AsyncMock(return_value=proactive)
+    repository.get_max_tokens = AsyncMock(return_value=max_tokens)
     return repository
 
 
@@ -530,11 +532,13 @@ async def test_build_general_info_includes_developer_and_chat_settings():
     assert "5 мин." in info
     assert "не задан (обычный стиль)" in info
     assert "выключены" in info
+    assert "300 токенов" in info
     repository.get_chat_settings.assert_awaited_once_with(42)
     repository.get_message_templates.assert_awaited_once_with(42)
     repository.get_escalation_settings.assert_awaited_once_with(42)
     repository.get_persona.assert_awaited_once_with(42)
     repository.get_proactive_settings.assert_awaited_once_with(42)
+    repository.get_max_tokens.assert_awaited_once_with(42)
 
 
 async def test_build_general_info_includes_persona_when_set():
