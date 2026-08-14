@@ -146,7 +146,7 @@ async def cmd_setkickafter(
 ) -> None:
     if not await _require_admin(message, bot):
         return
-    if not command.args or not command.args.strip().isdigit() or int(command.args.strip()) < 2:
+    if not command.args or not command.args.strip().isdecimal() or int(command.args.strip()) < 2:
         await message.answer("Использование: /setkickafter «число ≥ 2»")
         return
     violations = int(command.args.strip())
@@ -163,7 +163,7 @@ async def cmd_setmaxtokens(
         return
     if (
         not command.args
-        or not command.args.strip().isdigit()
+        or not command.args.strip().isdecimal()
         or not (50 <= int(command.args.strip()) <= 3000)
     ):
         await message.answer("Использование: /setmaxtokens «число, 50-3000»")

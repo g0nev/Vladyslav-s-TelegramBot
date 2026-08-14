@@ -337,6 +337,15 @@ async def test_setkickafter_rejects_non_numeric(repo):
     message.answer.assert_awaited_once_with("Использование: /setkickafter «число ≥ 2»")
 
 
+async def test_setkickafter_rejects_unicode_digit_that_int_cannot_parse(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setkickafter(message, cmd("²"), bot, repo)
+
+    message.answer.assert_awaited_once_with("Использование: /setkickafter «число ≥ 2»")
+
+
 async def test_setkickafter_updates_value(repo):
     bot = await make_bot(is_admin_user_id=1)
     message = make_message(user_id=1)
@@ -354,6 +363,16 @@ async def test_setmaxtokens_rejects_non_numeric(repo):
     await commands.cmd_setmaxtokens(message, cmd("много"), bot, repo)
 
     message.answer.assert_awaited_once_with("Использование: /setmaxtokens «число, 50-3000»")
+
+
+async def test_setmaxtokens_rejects_unicode_digit_that_int_cannot_parse(repo):
+    bot = await make_bot(is_admin_user_id=1)
+    message = make_message(user_id=1)
+
+    await commands.cmd_setmaxtokens(message, cmd("²"), bot, repo)
+
+    message.answer.assert_awaited_once_with("Использование: /setmaxtokens «число, 50-3000»")
+    assert await repo.get_max_tokens(1) == 300
 
 
 async def test_setmaxtokens_rejects_below_minimum(repo):
