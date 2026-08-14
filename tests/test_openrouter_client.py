@@ -250,7 +250,7 @@ async def test_ask_ai_with_tools_sends_only_meta_tools_in_payload(monkeypatch):
 
 async def test_ask_ai_with_tools_uses_config_default_max_tokens(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
-    monkeypatch.setattr(config, "OPENROUTER_MAX_TOKENS", 300)
+    monkeypatch.setattr(config, "OPENROUTER_MAX_TOKENS", 999)
 
     response = _text_response("ok")
     post_cm = AsyncMock()
@@ -266,7 +266,7 @@ async def test_ask_ai_with_tools_uses_config_default_max_tokens(monkeypatch):
         await ask_ai_with_tools("q", [], repository=_fake_repository(), chat_id=1)
 
     payload = session.post.call_args.kwargs["json"]
-    assert payload["max_tokens"] == 300
+    assert payload["max_tokens"] == 999
 
 
 async def test_ask_ai_with_tools_uses_explicit_max_tokens(monkeypatch):
@@ -799,7 +799,7 @@ async def test_generate_violation_reaction_includes_persona_and_punishment_in_pr
 
 async def test_generate_violation_reaction_uses_config_default_max_tokens(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
-    monkeypatch.setattr(config, "OPENROUTER_MAX_TOKENS", 300)
+    monkeypatch.setattr(config, "OPENROUTER_MAX_TOKENS", 999)
 
     response = AsyncMock()
     response.status = 200
@@ -818,7 +818,7 @@ async def test_generate_violation_reaction_uses_config_default_max_tokens(monkey
         await generate_violation_reaction("Дерзкий стиль", "warn", mute_minutes=5)
 
     payload = session.post.call_args.kwargs["json"]
-    assert payload["max_tokens"] == 300
+    assert payload["max_tokens"] == 999
 
 
 async def test_generate_violation_reaction_uses_explicit_max_tokens(monkeypatch):
@@ -1007,7 +1007,7 @@ async def test_generate_proactive_message_handles_empty_recent_messages(monkeypa
 
 async def test_generate_proactive_message_uses_config_default_max_tokens(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
-    monkeypatch.setattr(config, "OPENROUTER_MAX_TOKENS", 300)
+    monkeypatch.setattr(config, "OPENROUTER_MAX_TOKENS", 999)
 
     response = AsyncMock()
     response.status = 200
@@ -1026,7 +1026,7 @@ async def test_generate_proactive_message_uses_config_default_max_tokens(monkeyp
         await generate_proactive_message("Дерзкий стиль", ["привет"])
 
     payload = session.post.call_args.kwargs["json"]
-    assert payload["max_tokens"] == 300
+    assert payload["max_tokens"] == 999
 
 
 async def test_generate_proactive_message_uses_explicit_max_tokens(monkeypatch):
