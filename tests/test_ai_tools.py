@@ -292,3 +292,12 @@ async def test_set_kick_after_rejects_less_than_two(repo):
 async def test_unknown_tool_returns_block_message(repo):
     result = await execute_tool("do_something_evil", {}, **_ctx(repo))
     assert result == "Не могу выполнить этот запрос."
+
+
+def test_broadcast_tool_descriptions_distinguish_from_chat_content():
+    descriptions = {
+        schema["function"]["name"]: schema["function"]["description"] for schema in ADMIN_TOOLS
+    }
+    assert "read_chat_history" in descriptions["list_broadcast_messages"]
+    assert "не связано с файлами" in descriptions["add_broadcast_message"]
+    assert "не связано с файлами" in descriptions["delete_broadcast_message"]
