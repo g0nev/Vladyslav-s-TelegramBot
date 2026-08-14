@@ -45,8 +45,14 @@ def _author_name(message: object) -> str:
     sender = getattr(message, "sender", None)
     if sender is not None:
         name = getattr(sender, "first_name", None) or getattr(sender, "title", None)
-        if name:
-            return name
+        # Display names are fully user-controlled free text (a Telegram user
+        # can set their name to anything) and are rendered directly into the
+        # prompt for every subsequent /ask call, so they need the same
+        # filtering as message text/captions. Only the name falls back on a
+        # blocked/empty value — the message itself is still shown.
+        cleaned = _clean_text(name)
+        if cleaned:
+            return cleaned
     return "канал"
 
 
@@ -67,11 +73,18 @@ def _extract_item(message: object) -> Optional[_HistoryItem]:
                 message_id=message.id,
                 kind="audio",
                 author=author,
-                title=title,
-                performer=performer,
+                # ID3 tags are uploader-controlled free text just like
+                # message text — filter them the same way. `_format_item`
+                # already falls back to "без названия" when both are empty.
+                title=_clean_text(title),
+                performer=_clean_text(performer),
                 duration=duration,
             )
-        file_name = getattr(file, "name", None)
+        # A filename is attacker-controlled the same way message text is —
+        # filter it, and let a blocked/empty result fall back to the
+        # existing "файл без имени" handling in `_format_item` (and to the
+        # captionless-skip logic below) instead of leaking unfiltered text.
+        file_name = _clean_text(getattr(file, "name", None))
         caption = _clean_text(getattr(message, "text", None))
         if not file_name and not caption:
             # Captionless media with no identifying info (e.g. a bare photo
