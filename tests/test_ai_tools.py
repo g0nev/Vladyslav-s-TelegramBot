@@ -41,9 +41,9 @@ def test_tool_sets_have_expected_shape():
         "list_broadcast_messages",
     }
     assert PUBLIC_TOOL_NAMES <= ADMIN_TOOL_NAMES
-    assert len(ADMIN_TOOL_NAMES) == 18
+    assert len(ADMIN_TOOL_NAMES) == 19
     assert {"mute_user", "kick_user"} <= ADMIN_TOOL_NAMES
-    assert {"set_mute_minutes", "set_kick_after"} <= ADMIN_TOOL_NAMES
+    assert {"set_mute_minutes", "set_kick_after", "set_max_tokens"} <= ADMIN_TOOL_NAMES
     assert CONFIRMATION_TOOLS == {"mute_user", "kick_user"}
     assert TARGET_REQUIRED_TOOLS == {
         "get_user_warnings",
@@ -287,6 +287,24 @@ async def test_set_kick_after(repo):
 async def test_set_kick_after_rejects_less_than_two(repo):
     result = await execute_tool("set_kick_after", {"violations": 1}, **_ctx(repo))
     assert result == "Кик может происходить не раньше 2-го нарушения."
+
+
+async def test_set_max_tokens(repo):
+    result = await execute_tool("set_max_tokens", {"tokens": 800}, **_ctx(repo))
+    assert "800" in result
+    assert await repo.get_max_tokens(1) == 800
+
+
+async def test_set_max_tokens_rejects_below_minimum(repo):
+    result = await execute_tool("set_max_tokens", {"tokens": 49}, **_ctx(repo))
+    assert result == "Лимит токенов должен быть в диапазоне 50-3000."
+    assert await repo.get_max_tokens(1) == 300
+
+
+async def test_set_max_tokens_rejects_above_maximum(repo):
+    result = await execute_tool("set_max_tokens", {"tokens": 3001}, **_ctx(repo))
+    assert result == "Лимит токенов должен быть в диапазоне 50-3000."
+    assert await repo.get_max_tokens(1) == 300
 
 
 async def test_unknown_tool_returns_block_message(repo):

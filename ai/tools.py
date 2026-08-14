@@ -194,6 +194,20 @@ ADMIN_ONLY_TOOLS: list[dict] = [
             "required": ["violations"],
         },
     ),
+    _tool(
+        "set_max_tokens",
+        "Установить лимит длины ответа модели (в токенах) для этого чата, 50-3000.",
+        {
+            "type": "object",
+            "properties": {
+                "tokens": {
+                    "type": "integer",
+                    "description": "Лимит токенов ответа, число от 50 до 3000.",
+                }
+            },
+            "required": ["tokens"],
+        },
+    ),
 ]
 
 ADMIN_TOOLS: list[dict] = PUBLIC_TOOLS + ADMIN_ONLY_TOOLS
@@ -387,5 +401,12 @@ async def execute_tool(
             return "Кик может происходить не раньше 2-го нарушения."
         await repository.set_kick_after(chat_id, violations)
         return f"Кик теперь происходит начиная с {violations}-го нарушения."
+
+    if tool_name == "set_max_tokens":
+        tokens = _as_int(arguments.get("tokens"))
+        if tokens < 50 or tokens > 3000:
+            return "Лимит токенов должен быть в диапазоне 50-3000."
+        await repository.set_max_tokens(chat_id, tokens)
+        return f"Лимит токенов ответа установлен: {tokens}."
 
     return "Не могу выполнить этот запрос."
