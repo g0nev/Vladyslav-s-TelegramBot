@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from time import monotonic
 from typing import Optional
 
 import config
+from ai.content_filter import check_hard_block
 
 _TEXT_TRUNCATE_LENGTH = 120
 
@@ -29,6 +31,11 @@ def _clean_text(text: Optional[str]) -> Optional[str]:
     cleaned = " ".join(text.split())
     if not cleaned:
         return None
+    # Untrusted chat-member text reaches the LLM prompt on every subsequent
+    # /ask call for this chat — filter it the same way scheduler/proactive.py
+    # and moderation/handlers.py filter chat text before it reaches a model.
+    if check_hard_block(cleaned):
+        return None
     if len(cleaned) > _TEXT_TRUNCATE_LENGTH:
         return cleaned[: _TEXT_TRUNCATE_LENGTH - 1] + "…"
     return cleaned
@@ -50,7 +57,12 @@ def _extract_item(message: object) -> Optional[_HistoryItem]:
         title = getattr(file, "title", None)
         performer = getattr(file, "performer", None)
         duration = getattr(file, "duration", None)
-        if title or performer or duration:
+        # `duration` alone isn't a reliable audio signal — Telethon populates
+        # it for videos/video-notes/voice-notes too (DocumentAttributeVideo),
+        # not just real audio (DocumentAttributeAudio). Require an actual
+        # title/performer so those fall through to the document branch,
+        # where file_name/caption are used instead of being dropped.
+        if title or performer:
             return _HistoryItem(
                 message_id=message.id,
                 kind="audio",
@@ -137,7 +149,10 @@ async def fetch_chat_history(chat_id: int, client: object) -> str:
         return cached[1]
 
     try:
-        messages = await _collect_messages(client, chat_id, config.HISTORY_FETCH_LIMIT)
+        messages = await asyncio.wait_for(
+            _collect_messages(client, chat_id, config.HISTORY_FETCH_LIMIT),
+            timeout=config.HISTORY_FETCH_TIMEOUT_SECONDS,
+        )
         text = _render(chat_id, messages)
     except Exception:
         return "Не удалось получить историю чата (ошибка Telegram API)."
