@@ -248,6 +248,49 @@ async def test_ask_ai_with_tools_sends_only_meta_tools_in_payload(monkeypatch):
     assert payload["tool_choice"] == "auto"
 
 
+async def test_ask_ai_with_tools_uses_config_default_max_tokens(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_MAX_TOKENS", 300)
+
+    response = _text_response("ok")
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await ask_ai_with_tools("q", [], repository=_fake_repository(), chat_id=1)
+
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["max_tokens"] == 300
+
+
+async def test_ask_ai_with_tools_uses_explicit_max_tokens(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = _text_response("ok")
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await ask_ai_with_tools(
+            "q", [], repository=_fake_repository(), chat_id=1, max_tokens=800
+        )
+
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["max_tokens"] == 800
+
+
 async def test_ask_ai_with_tools_appends_persona_to_system_prompt(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
 
@@ -754,6 +797,55 @@ async def test_generate_violation_reaction_includes_persona_and_punishment_in_pr
     assert "15 минут" in prompt
 
 
+async def test_generate_violation_reaction_uses_config_default_max_tokens(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_MAX_TOKENS", 300)
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"choices": [{"message": {"content": "Ок"}}]})
+
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await generate_violation_reaction("Дерзкий стиль", "warn", mute_minutes=5)
+
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["max_tokens"] == 300
+
+
+async def test_generate_violation_reaction_uses_explicit_max_tokens(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"choices": [{"message": {"content": "Ок"}}]})
+
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await generate_violation_reaction(
+            "Дерзкий стиль", "warn", mute_minutes=5, max_tokens=900
+        )
+
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["max_tokens"] == 900
+
+
 async def test_generate_proactive_message_returns_text_on_success(monkeypatch):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
 
@@ -911,6 +1003,53 @@ async def test_generate_proactive_message_handles_empty_recent_messages(monkeypa
         result = await generate_proactive_message("Дерзкий стиль", [])
 
     assert result == "Привет!"
+
+
+async def test_generate_proactive_message_uses_config_default_max_tokens(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_MAX_TOKENS", 300)
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"choices": [{"message": {"content": "ок"}}]})
+
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await generate_proactive_message("Дерзкий стиль", ["привет"])
+
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["max_tokens"] == 300
+
+
+async def test_generate_proactive_message_uses_explicit_max_tokens(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"choices": [{"message": {"content": "ок"}}]})
+
+    post_cm = AsyncMock()
+    post_cm.__aenter__ = AsyncMock(return_value=response)
+    post_cm.__aexit__ = AsyncMock(return_value=None)
+    session = MagicMock()
+    session.post = MagicMock(return_value=post_cm)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        await generate_proactive_message("Дерзкий стиль", ["привет"], max_tokens=700)
+
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["max_tokens"] == 700
 
 
 def test_meta_tools_include_read_chat_history():

@@ -272,6 +272,7 @@ async def ask_ai_with_tools(
     chat_id: int,
     prior_answer: Optional[str] = None,
     telethon_client: Optional[TelegramClient] = None,
+    max_tokens: Optional[int] = None,
 ) -> AIResponse:
     """Ask the model, exposing only lightweight meta-tools by default.
 
@@ -287,6 +288,8 @@ async def ask_ai_with_tools(
     it), inserted as an assistant turn so the model can treat this as a
     continuation rather than a fresh, context-free question.
     """
+    effective_max_tokens = max_tokens if max_tokens is not None else config.OPENROUTER_MAX_TOKENS
+
     if not config.OPENROUTER_API_KEY:
         raise AIUnavailableError("OPENROUTER_API_KEY is not configured")
 
@@ -312,7 +315,7 @@ async def ask_ai_with_tools(
                     json={
                         "model": config.OPENROUTER_MODEL,
                         "messages": messages,
-                        "max_tokens": config.OPENROUTER_MAX_TOKENS,
+                        "max_tokens": effective_max_tokens,
                         "tools": META_TOOLS,
                         "tool_choice": "auto",
                     },
@@ -381,7 +384,7 @@ _PUNISHMENT_OUTCOMES = {
 
 
 async def generate_violation_reaction(
-    persona: str, punishment: str, mute_minutes: int
+    persona: str, punishment: str, mute_minutes: int, *, max_tokens: Optional[int] = None
 ) -> Optional[str]:
     """Single non-tool completion call for a moderation reaction line.
 
@@ -389,6 +392,8 @@ async def generate_violation_reaction(
     timeout, malformed/empty response) into None so the caller can fall
     back to the static punishment template without a try/except.
     """
+    effective_max_tokens = max_tokens if max_tokens is not None else config.OPENROUTER_MAX_TOKENS
+
     if not config.OPENROUTER_API_KEY:
         return None
 
@@ -409,7 +414,7 @@ async def generate_violation_reaction(
                 json={
                     "model": config.OPENROUTER_MODEL,
                     "messages": [{"role": "user", "content": task_prompt}],
-                    "max_tokens": config.OPENROUTER_MAX_TOKENS,
+                    "max_tokens": effective_max_tokens,
                 },
                 timeout=_REACTION_TIMEOUT,
             ) as response:
@@ -427,13 +432,17 @@ async def generate_violation_reaction(
     return text or None
 
 
-async def generate_proactive_message(persona: str, recent_messages: list[str]) -> Optional[str]:
+async def generate_proactive_message(
+    persona: str, recent_messages: list[str], *, max_tokens: Optional[int] = None
+) -> Optional[str]:
     """Single non-tool completion call for an unprompted chat reaction.
 
     Swallows every failure mode (missing key, non-200, network error,
     timeout, malformed/empty response) into None so the caller simply
     skips sending anything.
     """
+    effective_max_tokens = max_tokens if max_tokens is not None else config.OPENROUTER_MAX_TOKENS
+
     if not config.OPENROUTER_API_KEY:
         return None
 
@@ -455,7 +464,7 @@ async def generate_proactive_message(persona: str, recent_messages: list[str]) -
                 json={
                     "model": config.OPENROUTER_MODEL,
                     "messages": [{"role": "user", "content": task_prompt}],
-                    "max_tokens": config.OPENROUTER_MAX_TOKENS,
+                    "max_tokens": effective_max_tokens,
                 },
                 timeout=_REACTION_TIMEOUT,
             ) as response:
