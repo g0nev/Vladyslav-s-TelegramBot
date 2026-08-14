@@ -11,6 +11,7 @@ from admin.commands import router as admin_router
 from admin.group_commands import router as group_router
 from ai.handlers import router as ai_router
 from db.repository import Repository
+from history.telethon_client import start_client
 from moderation.handlers import router as moderation_router
 from moderation.logic import load_trigger_words_from_file
 from scheduler.broadcaster import load_scheduled_broadcasts
@@ -35,17 +36,22 @@ async def main() -> None:
     await load_scheduled_proactive(scheduler, bot, repository)
     scheduler.start()
 
+    telethon_client = await start_client()
+
     try:
         await dp.start_polling(
             bot,
             repository=repository,
             default_trigger_words=default_trigger_words,
             scheduler=scheduler,
+            telethon_client=telethon_client,
         )
     finally:
         scheduler.shutdown(wait=False)
         await repository.close()
         await bot.session.close()
+        if telethon_client is not None:
+            await telethon_client.disconnect()
 
 
 if __name__ == "__main__":
