@@ -129,3 +129,37 @@ async def test_fetch_chat_history_returns_friendly_message_on_client_error():
     result = await fetch_chat_history(1, client)
 
     assert result == "Не удалось получить историю чата (ошибка Telegram API)."
+
+
+async def test_fetch_chat_history_returns_friendly_message_on_render_error():
+    # duration is truthy (so item is classified as audio) but non-numeric,
+    # which breaks int(duration) inside _format_duration during rendering.
+    broken_message = SimpleNamespace(
+        id=1,
+        text=None,
+        file=SimpleNamespace(performer=None, title=None, duration="not-a-number", name=None),
+        sender=SimpleNamespace(first_name=None, title="My Music"),
+    )
+    client = _fake_client([broken_message])
+
+    result = await fetch_chat_history(1, client)
+
+    assert result == "Не удалось получить историю чата (ошибка Telegram API)."
+
+
+async def test_fetch_chat_history_skips_captionless_media_without_identifying_info():
+    # A "bare photo" with no caption: file present but no title/performer/duration/name/text.
+    bare_photo = SimpleNamespace(
+        id=1,
+        text=None,
+        file=SimpleNamespace(performer=None, title=None, duration=None, name=None),
+        sender=SimpleNamespace(first_name="Аня", title=None),
+    )
+    text_message = _text_message(2, "привет")
+    client = _fake_client([bare_photo, text_message])
+
+    result = await fetch_chat_history(-1001535605520, client)
+
+    assert "файл без имени" not in result
+    assert "1 сообщений/файлов из последних 2" in result
+    assert "привет" in result

@@ -59,12 +59,18 @@ def _extract_item(message: object) -> Optional[_HistoryItem]:
                 performer=performer,
                 duration=duration,
             )
+        file_name = getattr(file, "name", None)
+        caption = _clean_text(getattr(message, "text", None))
+        if not file_name and not caption:
+            # Captionless media with no identifying info (e.g. a bare photo
+            # with no caption) carries nothing useful to show — skip it.
+            return None
         return _HistoryItem(
             message_id=message.id,
             kind="document",
             author=author,
-            file_name=getattr(file, "name", None),
-            text=_clean_text(getattr(message, "text", None)),
+            file_name=file_name,
+            text=caption,
         )
     text = _clean_text(getattr(message, "text", None))
     if text is None:
@@ -132,9 +138,9 @@ async def fetch_chat_history(chat_id: int, client: object) -> str:
 
     try:
         messages = await _collect_messages(client, chat_id, config.HISTORY_FETCH_LIMIT)
+        text = _render(chat_id, messages)
     except Exception:
         return "Не удалось получить историю чата (ошибка Telegram API)."
 
-    text = _render(chat_id, messages)
     _cache[chat_id] = (monotonic(), text)
     return text
