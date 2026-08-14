@@ -16,6 +16,7 @@ from aiogram.types import (
     Message,
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from telethon import TelegramClient
 
 from admin.permissions import is_admin
 from ai.content_filter import check_hard_block
@@ -111,6 +112,7 @@ async def cmd_ask(
     bot: Bot,
     repository: Repository,
     scheduler: AsyncIOScheduler,
+    telethon_client: Optional[TelegramClient] = None,
 ) -> None:
     if not command.args or not command.args.strip():
         await message.answer(
@@ -151,6 +153,7 @@ async def cmd_ask(
             repository=repository,
             chat_id=message.chat.id,
             prior_answer=prior_answer,
+            telethon_client=telethon_client,
         )
     except AIUnavailableError:
         await message.answer(UNAVAILABLE_MESSAGE)

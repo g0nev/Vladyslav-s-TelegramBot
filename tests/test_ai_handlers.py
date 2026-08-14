@@ -431,3 +431,25 @@ async def test_ask_from_channel_post_target_required_tool_without_reply_is_refus
         await cmd_ask(message, cmd("замьють кого-то"), AsyncMock(), repo, MagicMock())
     sent = message.answer.await_args.args[0]
     assert "ответьте" in sent.lower()
+
+
+async def test_ask_passes_telethon_client_through_to_ask_ai_with_tools(repo):
+    message = make_message()
+    captured = {}
+
+    async def fake(question, tools, **kwargs):
+        captured.update(kwargs)
+        return AIResponse(text="ответ")
+
+    fake_client = object()
+    with patch("ai.handlers.ask_ai_with_tools", AsyncMock(side_effect=fake)):
+        await cmd_ask(
+            message,
+            cmd("что за музыка"),
+            AsyncMock(),
+            repo,
+            MagicMock(),
+            telethon_client=fake_client,
+        )
+
+    assert captured["telethon_client"] is fake_client
