@@ -33,7 +33,8 @@ async def _scheduled_proactive_job(
         for line in buffer.get_recent(chat_id, context_size)
         if not check_hard_block(line)
     ]
-    text = await generate_proactive_message(persona, recent)
+    max_tokens = await repository.get_max_tokens(chat_id)
+    text = await generate_proactive_message(persona, recent, max_tokens=max_tokens)
     if not text:
         return
 

@@ -149,7 +149,7 @@ async def test_scheduled_job_concurrent_calls_only_send_once(repo, scheduler):
     await repo.set_persona(chat_id=1, text="Дерзкий стиль")
     buffer.record_message(chat_id=1, author="Аня", text="привет", message_id=1)
 
-    async def slow_generate(persona, recent):
+    async def slow_generate(persona, recent, max_tokens=None):
         await asyncio.sleep(0.05)
         return "О, о чём базар?"
 
@@ -213,4 +213,18 @@ async def test_scheduled_job_uses_configured_context_size(repo, scheduler):
     ) as mock_generate:
         await _scheduled_proactive_job(scheduler, bot, repo, chat_id=1)
 
-    mock_generate.assert_awaited_once_with("Дерзкий стиль", ["Боря: новое"])
+    mock_generate.assert_awaited_once_with("Дерзкий стиль", ["Боря: новое"], max_tokens=300)
+
+
+async def test_scheduled_job_uses_chat_configured_max_tokens(repo, scheduler):
+    bot = AsyncMock()
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    await repo.set_max_tokens(chat_id=1, tokens=900)
+    buffer.record_message(chat_id=1, author="Боря", text="новое", message_id=1)
+
+    with patch(
+        "scheduler.proactive.generate_proactive_message", AsyncMock(return_value="ок")
+    ) as mock_generate:
+        await _scheduled_proactive_job(scheduler, bot, repo, chat_id=1)
+
+    mock_generate.assert_awaited_once_with("Дерзкий стиль", ["Боря: новое"], max_tokens=900)

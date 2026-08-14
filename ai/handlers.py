@@ -146,6 +146,7 @@ async def cmd_ask(
         target_id = reply.from_user.id
         target_mention = reply.from_user.mention_html()
 
+    max_tokens = await repository.get_max_tokens(message.chat.id)
     try:
         response = await ask_ai_with_tools(
             question,
@@ -154,6 +155,7 @@ async def cmd_ask(
             chat_id=message.chat.id,
             prior_answer=prior_answer,
             telethon_client=telethon_client,
+            max_tokens=max_tokens,
         )
     except AIUnavailableError:
         await message.answer(UNAVAILABLE_MESSAGE)

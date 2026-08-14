@@ -113,6 +113,21 @@ async def test_admin_receives_admin_tools(repo):
     assert captured["tools"] is ADMIN_TOOLS
 
 
+async def test_ask_uses_chat_configured_max_tokens(repo):
+    await repo.set_max_tokens(chat_id=1, tokens=900)
+    message = make_message()
+    captured = {}
+
+    async def fake(question, tools, **kwargs):
+        captured["max_tokens"] = kwargs.get("max_tokens")
+        return AIResponse(text="ответ")
+
+    with patch("ai.handlers.ask_ai_with_tools", AsyncMock(side_effect=fake)):
+        await cmd_ask(message, cmd("привет"), AsyncMock(), repo, MagicMock())
+
+    assert captured["max_tokens"] == 900
+
+
 async def test_text_response_is_forwarded(repo):
     message = make_message()
     with patch("ai.handlers.is_admin", AsyncMock(return_value=False)):

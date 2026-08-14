@@ -270,8 +270,23 @@ async def test_reaction_uses_ai_when_persona_set(repo):
     ) as mock_generate:
         await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
 
-    mock_generate.assert_awaited_once_with("Дерзкий стиль", "warn", 5)
+    mock_generate.assert_awaited_once_with("Дерзкий стиль", "warn", 5, max_tokens=300)
     message.answer.assert_awaited_once_with("User100, Так, полегче там!")
+
+
+async def test_reaction_uses_chat_configured_max_tokens(repo):
+    bot = await make_bot()
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    await repo.set_max_tokens(chat_id=1, tokens=900)
+    message = make_message("спам")
+
+    with patch(
+        "moderation.handlers.generate_violation_reaction",
+        AsyncMock(return_value="Так, полегче там!"),
+    ) as mock_generate:
+        await handle_moderated_message(message, bot, repo, default_trigger_words=["спам"])
+
+    mock_generate.assert_awaited_once_with("Дерзкий стиль", "warn", 5, max_tokens=900)
 
 
 async def test_reaction_falls_back_to_template_when_ai_returns_none(repo):
@@ -385,6 +400,26 @@ async def test_proactive_reaction_sent_on_dice_win(repo, monkeypatch):
     message.answer.assert_awaited_once_with("О, интересная тема!")
 
 
+async def test_proactive_reaction_uses_chat_configured_max_tokens(repo, monkeypatch):
+    bot = await make_bot()
+    message = make_message("о чём поговорим", message_id=5)
+    await repo.set_persona(chat_id=1, text="Дерзкий стиль")
+    await repo.set_proactive_probability(chat_id=1, probability=0.5)
+    await repo.set_max_tokens(chat_id=1, tokens=900)
+    buffer.record_message(chat_id=1, author="User100", text="о чём поговорим", message_id=5)
+    monkeypatch.setattr(handlers.random, "random", lambda: 0.1)
+
+    with patch(
+        "moderation.handlers.generate_proactive_message",
+        AsyncMock(return_value="О, интересная тема!"),
+    ) as mock_generate:
+        await _maybe_send_proactive_reaction(message, bot, repo)
+
+    mock_generate.assert_awaited_once_with(
+        "Дерзкий стиль", ["User100: о чём поговорим"], max_tokens=900
+    )
+
+
 async def test_proactive_reaction_skipped_on_cooldown(repo, monkeypatch):
     bot = await make_bot()
     message = make_message("привет", message_id=2)
@@ -406,7 +441,7 @@ async def test_proactive_reaction_concurrent_calls_only_send_once(repo, monkeypa
     buffer.record_message(chat_id=1, author="User100", text="о чём поговорим", message_id=5)
     monkeypatch.setattr(handlers.random, "random", lambda: 0.0)
 
-    async def slow_generate(persona, recent):
+    async def slow_generate(persona, recent, max_tokens=None):
         await asyncio.sleep(0.05)
         return "О, интересная тема!"
 

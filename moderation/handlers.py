@@ -124,7 +124,10 @@ async def handle_moderated_message(
     persona = await repository.get_persona(message.chat.id)
     reaction_text: Optional[str] = None
     if persona:
-        reaction_text = await generate_violation_reaction(persona, punishment, mute_minutes)
+        max_tokens = await repository.get_max_tokens(message.chat.id)
+        reaction_text = await generate_violation_reaction(
+            persona, punishment, mute_minutes, max_tokens=max_tokens
+        )
 
     if reaction_text:
         text = f"{_mention(message)}, {html.escape(reaction_text)}"
@@ -168,7 +171,8 @@ async def _maybe_send_proactive_reaction(
         for line in buffer.get_recent(message.chat.id, context_size)
         if not check_hard_block(line)
     ]
-    text = await generate_proactive_message(persona, recent)
+    max_tokens = await repository.get_max_tokens(message.chat.id)
+    text = await generate_proactive_message(persona, recent, max_tokens=max_tokens)
     if not text:
         return
 
