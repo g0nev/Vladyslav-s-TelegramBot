@@ -117,6 +117,7 @@ async def test_migration_adds_columns_to_preexisting_db(tmp_path):
     assert (mute_minutes, kick_after) == (5, 3)
     assert await reopened_repo.get_persona(chat_id=1) is None
     assert await reopened_repo.get_proactive_settings(chat_id=1) == ("off", 0, 0.0, 3)
+    assert await reopened_repo.get_max_tokens(chat_id=1) == 300
     await reopened_repo.close()
 
 
@@ -155,6 +156,15 @@ async def test_set_kick_after(repo):
     await repo.set_kick_after(chat_id=1, violations=5)
     _, kick_after = await repo.get_escalation_settings(chat_id=1)
     assert kick_after == 5
+
+
+async def test_max_tokens_defaults_to_300(repo):
+    assert await repo.get_max_tokens(chat_id=1) == 300
+
+
+async def test_set_max_tokens(repo):
+    await repo.set_max_tokens(chat_id=1, tokens=800)
+    assert await repo.get_max_tokens(chat_id=1) == 800
 
 
 async def test_persona_defaults_to_none(repo):

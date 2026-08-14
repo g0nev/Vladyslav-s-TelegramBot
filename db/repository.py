@@ -21,6 +21,7 @@ _MIGRATION_COLUMNS = {
     "proactive_interval_min": "INTEGER NOT NULL DEFAULT 0",
     "proactive_probability": "REAL NOT NULL DEFAULT 0.0",
     "proactive_context_size": "INTEGER NOT NULL DEFAULT 3",
+    "max_tokens": "INTEGER NOT NULL DEFAULT 300",
 }
 
 
@@ -256,6 +257,21 @@ class Repository:
         await self._conn.execute(
             "UPDATE chat_settings SET kick_after_violation = ? WHERE chat_id = ?",
             (violations, chat_id),
+        )
+        await self._conn.commit()
+
+    async def get_max_tokens(self, chat_id: int) -> int:
+        await self.get_chat_settings(chat_id)
+        cursor = await self._conn.execute(
+            "SELECT max_tokens FROM chat_settings WHERE chat_id = ?", (chat_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0]
+
+    async def set_max_tokens(self, chat_id: int, tokens: int) -> None:
+        await self.get_chat_settings(chat_id)
+        await self._conn.execute(
+            "UPDATE chat_settings SET max_tokens = ? WHERE chat_id = ?", (tokens, chat_id)
         )
         await self._conn.commit()
 
