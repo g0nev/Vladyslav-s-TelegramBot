@@ -5,10 +5,12 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import aiohttp
+from telethon import TelegramClient
 
 import config
 from admin.bot_commands import BOT_COMMANDS
 from db.repository import Repository
+from history.fetch import fetch_chat_history
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -16,6 +18,7 @@ MAX_TOOL_ROUNDS = 3
 
 READ_TOOLS_REFERENCE = "read_tools_reference"
 READ_GENERAL_INFO = "read_general_info"
+READ_CHAT_HISTORY = "read_chat_history"
 CALL_TOOL = "call_tool"
 
 META_TOOLS: list[dict] = [
@@ -42,6 +45,21 @@ META_TOOLS: list[dict] = [
                 "этого чата (автосброс предупреждений, интервал рассылки, тексты наказаний). "
                 "Вызывай это для вопросов о боте/разработчике/правилах модерации/настройках "
                 "чата — а не для вопросов о списке команд (для этого read_tools_reference)."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": READ_CHAT_HISTORY,
+            "description": (
+                "Показать сообщения/файлы, которые реально есть в этом чате/канале "
+                "(текст, аудио, документы) — вызывай для вопросов про содержимое чата: "
+                "какие есть треки/файлы, что обсуждали, посоветовать что-то из уже "
+                "присланного и т.п. Не путай с read_general_info (настройки бота) и с "
+                "командами рассылки (это отдельный, не связанный с содержимым чата пул "
+                "текстов)."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -253,6 +271,7 @@ async def ask_ai_with_tools(
     repository: Repository,
     chat_id: int,
     prior_answer: Optional[str] = None,
+    telethon_client: Optional[TelegramClient] = None,
 ) -> AIResponse:
     """Ask the model, exposing only lightweight meta-tools by default.
 
@@ -333,6 +352,8 @@ async def ask_ai_with_tools(
                     reference_text = build_tools_reference(tools)
                 elif name == READ_GENERAL_INFO:
                     reference_text = await build_general_info(chat_id, repository)
+                elif name == READ_CHAT_HISTORY:
+                    reference_text = await fetch_chat_history(chat_id, telethon_client)
                 else:
                     reference_text = "Неизвестный инструмент."
 

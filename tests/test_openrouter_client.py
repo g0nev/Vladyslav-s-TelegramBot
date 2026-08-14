@@ -8,6 +8,7 @@ import config
 from ai.openrouter_client import (
     CALL_TOOL,
     META_TOOLS,
+    READ_CHAT_HISTORY,
     READ_GENERAL_INFO,
     READ_TOOLS_REFERENCE,
     SYSTEM_PROMPT,
@@ -910,3 +911,77 @@ async def test_generate_proactive_message_handles_empty_recent_messages(monkeypa
         result = await generate_proactive_message("Дерзкий стиль", [])
 
     assert result == "Привет!"
+
+
+def test_meta_tools_include_read_chat_history():
+    names = {tool["function"]["name"] for tool in META_TOOLS}
+    assert READ_CHAT_HISTORY in names
+
+
+async def test_ask_ai_with_tools_reads_chat_history_then_answers(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    responses = [
+        _tool_call_response(READ_CHAT_HISTORY, "{}"),
+        _text_response("Вот забавный рок-трек из канала: Rammstein — Du Hast."),
+    ]
+    session = MagicMock()
+    post_cms = []
+    for resp in responses:
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=None)
+        post_cms.append(cm)
+    session.post = MagicMock(side_effect=post_cms)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    fake_client = object()
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        with patch(
+            "ai.openrouter_client.fetch_chat_history",
+            AsyncMock(return_value="1. [аудио] Rammstein — Du Hast"),
+        ) as fetch_mock:
+            result = await ask_ai_with_tools(
+                "подскажи рок песню из тех что есть в канале",
+                [],
+                repository=_fake_repository(),
+                chat_id=42,
+                telethon_client=fake_client,
+            )
+
+    assert result.text == "Вот забавный рок-трек из канала: Rammstein — Du Hast."
+    fetch_mock.assert_awaited_once_with(42, fake_client)
+
+    second_call_payload = session.post.call_args_list[1].kwargs["json"]
+    tool_messages = [m for m in second_call_payload["messages"] if m.get("role") == "tool"]
+    assert len(tool_messages) == 1
+    assert "Rammstein" in tool_messages[0]["content"]
+
+
+async def test_ask_ai_with_tools_defaults_telethon_client_to_none(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+
+    responses = [_tool_call_response(READ_CHAT_HISTORY, "{}"), _text_response("ok")]
+    session = MagicMock()
+    post_cms = []
+    for resp in responses:
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=None)
+        post_cms.append(cm)
+    session.post = MagicMock(side_effect=post_cms)
+    session_cm = AsyncMock()
+    session_cm.__aenter__ = AsyncMock(return_value=session)
+    session_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("ai.openrouter_client.aiohttp.ClientSession", return_value=session_cm):
+        with patch(
+            "ai.openrouter_client.fetch_chat_history", AsyncMock(return_value="нет данных")
+        ) as fetch_mock:
+            await ask_ai_with_tools(
+                "что за музыка в канале", [], repository=_fake_repository(), chat_id=1
+            )
+
+    fetch_mock.assert_awaited_once_with(1, None)
