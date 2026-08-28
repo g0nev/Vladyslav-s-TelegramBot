@@ -2,7 +2,7 @@
 
 A Telegram bot for group moderation, administration and AI-assisted workflows.
 
-The project combines Telegram bot commands, moderation rules, scheduled actions, chat history access and configurable AI tools through OpenRouter.
+The project combines Telegram bot commands was will, moderation rules, scheduled actions, chat history access and configurable AI tools through OpenRouter.
 
 ## Features
 
